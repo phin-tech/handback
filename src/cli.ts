@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -19,6 +20,7 @@ try {
   else if (command === "open") await open(args[1]);
   else if (command === "list") await list();
   else if (command === "tee") await tee(args[1], args[2], args[3]);
+  else if (command === "--version" || command === "-v") version();
   else help(command ? 1 : 0);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
@@ -178,6 +180,12 @@ async function startSession(nameOrPath: string, vars: Record<string, string>): P
   child.unref();
 
   return waitForUrl(id);
+}
+
+function version(): void {
+  const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string };
+  console.log(pkg.version);
+  process.exit(0);
 }
 
 function serverRunnerPath(): string {
