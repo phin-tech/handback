@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'ui/**'
+      - 'src/**'
       - '.github/workflows/docs.yml'
       - 'package.json'
   workflow_dispatch:
@@ -30,6 +32,15 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Build app (for demo assets)
+        run: npm run build
+
+      - name: Copy demo assets
+        run: |
+          mkdir -p docs/public/demo-assets
+          cp dist/ui/assets/*.js docs/public/demo-assets/app.js
+          cp dist/ui/assets/*.css docs/public/demo-assets/app.css
 
       - name: Build docs
         run: npm run docs:build

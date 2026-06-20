@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>handback — live demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./demo-assets/app.css" />
+    <style>
+      .demo-chip {
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        z-index: 20;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        background: var(--bg-2);
+        border: 1px solid var(--rule-2);
+        border-radius: 999px;
+        padding: 5px 12px;
+        pointer-events: none;
+        user-select: none;
+      }
+      .demo-chip::before {
+        content: "";
+        display: block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--done);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div class="demo-chip">demo · no server</div>
+
+    <script>
+      // ── Ensure the app always has a token in the URL ──────────────────────
+      (function () {
+        const sp = new URLSearchParams(location.search);
+        if (!sp.has("token")) {
+          sp.set("token", "demo");
+          history.replaceState(null, "", "?" + sp.toString());
+        }
+      })();
+
+      // ── Sample task (cross-service release) ───────────────────────────────
+      const TASK = {
+        title: "Ship v2.4 across services",
+        steps: [
+          {
+            id: "migrate",
+            title: "Apply the v2.4 DB migration",
+            source: { kind: "repo", label: "phin-tech/schema · PR #84", href: "https://github.com/phin-tech/handback" },
+            note: "Additive only — adds tenant_tier and backfills nulls to free. Safe to run during traffic; no lock on orders.",
+            body: "Run it against the primary, then sanity-check the row count.",
+            commands: ["./migrate up --version 2.4"],
+            checks: [
+              { id: "merged", label: "phin-tech/schema#84 is merged", kind: "github_pr_merged", owner: "phin-tech", repo: "schema", number: 84 }
+            ],
+            confirms: [{ id: "applied", label: "Migration applied cleanly on the primary", required: true }],
+            inputs: [{ id: "rows", label: "Rows affected", kind: "text" }]
+          },
+          {
+            id: "orders",
+            title: "Deploy orders service",
+            requires: ["migrate"],
+            source: { kind: "repo", label: "phin-tech/orders-svc · PR #88", href: "https://github.com/phin-tech/handback" },
+            body: "Reads tenant_tier, so it has to go out after the migration.",
+            commands: ["./deploy orders --tag v2.4"],
+            checks: [
+              { id: "merged", label: "phin-tech/orders-svc#88 is merged", kind: "github_pr_merged", owner: "phin-tech", repo: "orders-svc", number: 88 }
+            ],
+            confirms: [{ id: "healthz", label: "orders /healthz returns 200 after rollout", required: true }]
+          },
+          {
+            id: "flag",
+            title: "Turn on tiered pricing",
+            requires: ["orders"],
+            source: { kind: "tool", label: "LaunchDarkly · production" },
+            note: "Ramp to 10% first and watch the orders error rate for ~5 min before going to 100%. If anything spikes, kill the flag — it's safe to toggle off, the old path still works.",
+            body: "Flip tiered_pricing for production. If the ramp misbehaves, switch to the fallback.",
+            paths: [
+              {
+                id: "ramp",
+                label: "Ramp the flag",
+                links: [{ label: "LaunchDarkly flag", href: "https://github.com/phin-tech/handback" }],
+                confirms: [{ id: "ramped", label: "Flag at 100%, error rate steady", required: true }]
+              },
+              {
+                id: "rollback",
+                label: "Roll back",
+                outcome: "rolled back",
+                body: "Toggle the flag off — checkout falls back to flat pricing and stays healthy.",
+                links: [{ label: "Open follow-up issue", href: "https://github.com/phin-tech/handback/issues" }],
+                confirms: [{ id: "flagoff", label: "Flag is off, service healthy", required: true }]
+              }
+            ]
+          },
+          {
+            id: "checkout",
+            title: "Deploy checkout service",
+            requires: ["migrate", "orders"],
+            source: { kind: "repo", label: "phin-tech/checkout-svc · PR #91", href: "https://github.com/phin-tech/handback" },
+            body: "Calls orders for tier pricing — needs the migration and orders live first.",
+            commands: ["./deploy checkout --tag v2.4"],
+            checks: [
+              { id: "merged", label: "phin-tech/checkout-svc#91 is merged", kind: "github_pr_merged", owner: "phin-tech", repo: "checkout-svc", number: 91 }
+            ],
+            confirms: [{ id: "e2e", label: "A test checkout completed end-to-end", required: true }],
+            inputs: [{ id: "notes", label: "Deploy notes", kind: "textarea" }]
+          },
+          {
+            id: "wrap",
+            title: "Announce & close out",
+            requires: ["flag", "checkout"],
+            source: { kind: "tool", label: "Slack · Linear" },
+            body: "Post the release note and move the ticket to Done.",
+            links: [
+              { label: "#releases", href: "https://github.com/phin-tech/handback" },
+              { label: "PHIN-2041", href: "https://github.com/phin-tech/handback" }
+            ],
+            confirms: [
+              { id: "posted", label: "Posted in #releases", required: true },
+              { id: "ticket", label: "Linear ticket moved to Done" }
+            ],
+            inputs: [{ id: "note_link", label: "Release note link", kind: "text" }]
+          }
+        ]
+      };
+
+      // ── In-memory session state ────────────────────────────────────────────
+      const SESSION = {
+        id: "hb_demo",
+        status: "open",
+        task: TASK,
+        steps: {}
+      };
+      for (const step of TASK.steps) {
+        SESSION.steps[step.id] = {
+          status: "pending",
+          inputs: {},
+          selectedPath: step.paths ? step.paths[0].id : undefined
+        };
+      }
+
+      // Checks: all unavailable (no real gh CLI in the browser)
+      const CHECKS = {};
+      for (const step of TASK.steps) {
+        if (step.checks && step.checks.length) {
+          CHECKS[step.id] = step.checks.map(function (c) {
+            return { id: c.id, status: "unavailable", output: "checks require handback + gh CLI" };
+          });
+        }
+      }
+
+      // ── Fetch interceptor ─────────────────────────────────────────────────
+      var _realFetch = window.fetch;
+      window.fetch = function (url, opts) {
+        var u = String(url);
+
+        function ok(data) {
+          return Promise.resolve({ ok: true, json: function () { return Promise.resolve(data); } });
+        }
+        function snapshot() {
+          return JSON.parse(JSON.stringify(SESSION));
+        }
+
+        if (u.indexOf("/api/status") !== -1) {
+          return ok({ session: snapshot(), checks: CHECKS });
+        }
+
+        var stepMatch = u.match(/\/api\/steps\/([^?]*)/);
+        if (stepMatch) {
+          var stepId = decodeURIComponent(stepMatch[1]);
+          try {
+            var body = JSON.parse((opts && opts.body) || "{}");
+            var state = SESSION.steps[stepId];
+            if (state) {
+              if (body.status !== undefined) state.status = body.status;
+              if (body.inputs !== undefined) state.inputs = Object.assign({}, body.inputs);
+              if (body.selectedPath !== undefined) state.selectedPath = body.selectedPath;
+            }
+          } catch (e) {}
+          return ok(snapshot());
+        }
+
+        if (u.indexOf("/api/finish") !== -1) {
+          try {
+            var fb = JSON.parse((opts && opts.body) || "{}");
+            SESSION.status = "finished";
+          } catch (e) {}
+          return ok({ sessionId: SESSION.id, outcome: "completed" });
+        }
+
+        return _realFetch ? _realFetch(url, opts) : Promise.resolve({ ok: false, json: function () { return Promise.resolve({ error: "not found" }); } });
+      };
+    </script>
+
+    <script type="module" src="./demo-assets/app.js"></script>
+  </body>
+</html>
