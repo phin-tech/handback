@@ -19,7 +19,7 @@ sign-off. Don't use it for work the agent can do itself.
 ## Workflow
 
 1. Write a task JSON file (see shape below; full reference in
-   [references/task-format.md](references/task-format.md)).
+   [`docs/reference/task-format.md`](../../docs/reference/task-format.md)).
 2. Run it: `handback run task.json` — blocks until the human finishes, then prints the result
    JSON. (`handback start task.json` returns immediately with `{sessionId, url, token}` if you
    want to poll with `handback wait <id>` instead.)
@@ -75,5 +75,5 @@ sign-off. Don't use it for work the agent can do itself.
 - Every field except `id`/`title` is optional. Add only what the step needs.
 
 A complete, realistic example using every feature lives at
-[references/cross-service-release.json](references/cross-service-release.json).
-Full field-by-field reference: [references/task-format.md](references/task-format.md).
+[`examples/cross-service-release.json`](../../examples/cross-service-release.json).
+Full field-by-field reference: [`docs/reference/task-format.md`](../../docs/reference/task-format.md).

@@ -29,7 +29,6 @@
           "expect": "APPROVED"
         }
       ],
-      "canCompleteWhen": "checks_pass",
       "autoCompleteWhen": "checks_pass"
     },
     {

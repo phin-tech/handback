@@ -1,36 +1,11 @@
 <script lang="ts">
-  type Input =
-    | { id: string; label: string; kind: "text" | "textarea" | "checkbox"; required?: boolean }
-    | { id: string; label: string; kind: "select" | "multiselect"; options: string[]; required?: boolean };
-  type Confirm = { id: string; label: string; required?: boolean };
-  type Source = { kind: "repo" | "tool"; label: string; href?: string };
-  type Link = { label: string; href: string };
-  type CheckSpec =
-    | { id: string; label: string; kind: "github_pr_review_decision" }
-    | { id: string; label: string; kind: "github_pr_merged" };
-  type Path = { id: string; label: string; outcome?: string; body?: string; commands?: string[]; links?: Link[]; confirms?: Confirm[] };
-  type Step = {
-    id: string;
-    title: string;
-    body?: string;
-    note?: string;
-    source?: Source;
-    links?: Link[];
-    commands?: string[];
-    requires?: string[];
-    inputs?: Input[];
-    confirms?: Confirm[];
-    checks?: CheckSpec[];
-    paths?: Path[];
-  };
-  type StepStatus = "pending" | "done" | "skipped" | "blocked";
-  type StepState = { status: StepStatus; inputs: Record<string, any>; selectedPath?: string };
-  type Session = { id: string; status: string; task: { title: string; steps: Step[] }; steps: Record<string, StepState> };
-  type Check = { id: string; status: "pass" | "fail" | "unavailable"; output?: string };
+  import type { CheckResult, InputValue, Path, Session, SessionOutcome, Step, StepState, StepStatus } from "../../src/core.js";
+
+  type PublicSession = Omit<Session, "token">;
 
   const token = new URLSearchParams(location.search).get("token") ?? "";
-  let session = $state<Session | null>(null);
-  let checks = $state<Record<string, Check[]>>({});
+  let session = $state<PublicSession | null>(null);
+  let checks = $state<Record<string, CheckResult[]>>({});
   let error = $state("");
   let returned = $state(false);
   let reason = $state("");
@@ -117,7 +92,7 @@
   }
 
   // ---- networking ----------------------------------------------------------
-  function mergeSession(incoming: Session): Session {
+  function mergeSession(incoming: PublicSession): PublicSession {
     if (!session) return incoming;
     const mergedSteps: Record<string, StepState> = {};
     for (const [id, inState] of Object.entries(incoming.steps)) {
@@ -179,7 +154,7 @@
     }
   }
 
-  async function finish(outcome: "completed" | "incomplete" | "cancelled"): Promise<void> {
+  async function finish(outcome: SessionOutcome): Promise<void> {
     const res = await fetch(`/api/finish?token=${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -197,10 +172,14 @@
   }
 
   // ---- local input handling ------------------------------------------------
-  function value(stepId: string, inputId: string): any {
+  function value(stepId: string, inputId: string): InputValue | undefined {
     return session?.steps[stepId]?.inputs[inputId];
   }
-  function setValue(stepId: string, inputId: string, next: any): void {
+  function stringValue(stepId: string, inputId: string): string {
+    const v = value(stepId, inputId);
+    return typeof v === "string" ? v : "";
+  }
+  function setValue(stepId: string, inputId: string, next: InputValue): void {
     const state = session?.steps[stepId];
     if (!state) return;
     state.inputs[inputId] = next;
@@ -441,11 +420,11 @@
                 <div class="field">
                   <label for={`f-${step.id}-${input.id}`}>{input.label}{input.required ? " *" : ""}</label>
                   {#if input.kind === "textarea"}
-                    <textarea id={`f-${step.id}-${input.id}`} value={value(step.id, input.id) ?? ""} oninput={(e) => setValue(step.id, input.id, e.currentTarget.value)}></textarea>
+                    <textarea id={`f-${step.id}-${input.id}`} value={stringValue(step.id, input.id)} oninput={(e) => setValue(step.id, input.id, e.currentTarget.value)}></textarea>
                   {:else if input.kind === "checkbox"}
                     <input id={`f-${step.id}-${input.id}`} type="checkbox" checked={Boolean(value(step.id, input.id))} onchange={(e) => setValue(step.id, input.id, e.currentTarget.checked)} />
                   {:else if input.kind === "select"}
-                    <select id={`f-${step.id}-${input.id}`} value={value(step.id, input.id) ?? ""} onchange={(e) => setValue(step.id, input.id, e.currentTarget.value)}>
+                    <select id={`f-${step.id}-${input.id}`} value={stringValue(step.id, input.id)} onchange={(e) => setValue(step.id, input.id, e.currentTarget.value)}>
                       <option value=""></option>
                       {#each input.options as option}<option value={option}>{option}</option>{/each}
                     </select>
@@ -461,7 +440,7 @@
                       {/each}
                     </div>
                   {:else}
-                    <input id={`f-${step.id}-${input.id}`} type="text" value={value(step.id, input.id) ?? ""} oninput={(e) => setValue(step.id, input.id, e.currentTarget.value)} />
+                    <input id={`f-${step.id}-${input.id}`} type="text" value={stringValue(step.id, input.id)} oninput={(e) => setValue(step.id, input.id, e.currentTarget.value)} />
                   {/if}
                 </div>
               {/each}

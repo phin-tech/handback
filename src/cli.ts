@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { createSession, buildResult, parseTask } from "./core.js";
 import { createSessionStore } from "./session-store.js";
+import { openUrl } from "./server.js";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -58,9 +59,7 @@ async function open(id: string | undefined): Promise<void> {
   if (!id) throw new Error("Usage: handback open <session-id>");
   const session = await store.load(id);
   if (!session.url) throw new Error("Session has no URL yet");
-  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-  const openArgs = process.platform === "win32" ? ["/c", "start", "", session.url] : [session.url];
-  spawn(opener, openArgs, { detached: true, stdio: "ignore" }).unref();
+  openUrl(session.url);
 }
 
 async function list(): Promise<void> {

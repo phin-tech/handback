@@ -25,7 +25,6 @@ The task JSON is validated by a Zod schema. Unknown keys are stripped — match 
 | `confirms` | `Confirm[]` | Operator tick-list (human-verified). |
 | `checks` | `Check[]` | System-owned, auto-evaluated checks. |
 | `paths` | `Path[]` | ≥2 alternative ways to satisfy the step. |
-| `canCompleteWhen` | `"always"` \| `"checks_pass"` | Default `"always"`. |
 | `autoCompleteWhen` | `"never"` \| `"checks_pass"` | Default `"never"`. Auto-marks the step done when all checks pass. |
 
 Field ids must be unique within a step across `inputs`, `confirms`, and all paths' `confirms`.

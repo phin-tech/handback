@@ -83,7 +83,7 @@ blockers are done). Click **Finish** and the command prints the result to stdout
 | `commands` / `links` | Shell snippets (with copy button) and reference links                 |
 
 Full field-by-field reference:
-[`skills/handback-runbooks/references/task-format.md`](skills/handback-runbooks/references/task-format.md).
+[`docs/reference/task-format.md`](docs/reference/task-format.md).
 A complete, realistic example: [`examples/cross-service-release.json`](examples/cross-service-release.json).
 
 ## CLI
@@ -122,7 +122,7 @@ npm run check    # svelte-check
 - `src/` — the Node backend: `core.ts` (Zod task schema + session state), `checks.ts` (gh-based
   checks), `server.ts` (HTTP API + static UI), `cli.ts` (entrypoint), `session-store.ts`.
 - `ui/` — the Svelte 5 single-page runbook.
-- `examples/`, `test/`, `skills/`, `design-mocks/`.
+- `examples/`, `test/`, `skills/`.
 
 ## License
 

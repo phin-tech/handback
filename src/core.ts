@@ -73,7 +73,6 @@ export const StepSchema = z.object({
   confirms: z.array(ConfirmSchema).optional(),
   checks: z.array(CheckSchema).optional(),
   paths: z.array(PathSchema).min(2).optional(),
-  canCompleteWhen: z.enum(["always", "checks_pass"]).default("always"),
   autoCompleteWhen: z.enum(["never", "checks_pass"]).default("never")
 });
 

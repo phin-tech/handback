@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+docs/public/demo-assets/
 
 # Logs
 *.log

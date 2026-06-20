@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { spawn } from "node:child_process";
 import { createReadStream, existsSync } from "node:fs";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,7 +88,7 @@ export async function serveSession(input: { id: string; sessionDir?: string; ope
   const url = `http://127.0.0.1:${address.port}/?token=${encodeURIComponent(session.token)}`;
   session = { ...session, pid: process.pid, port: address.port, url };
   await store.save(session);
-  if (input.open) openBrowser(url);
+  if (input.open) openUrl(url);
   return { port: address.port, url, close: closeServer, closed };
 }
 
@@ -135,8 +136,8 @@ function contentType(file: string): string {
   return extname(file) === ".js" ? "text/javascript" : extname(file) === ".css" ? "text/css" : "text/html";
 }
 
-function openBrowser(url: string): void {
+export function openUrl(url: string): void {
   const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
   const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
-  import("node:child_process").then(({ spawn }) => spawn(cmd, args, { detached: true, stdio: "ignore" }).unref());
+  spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
 }
