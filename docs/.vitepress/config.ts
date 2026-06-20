@@ -16,7 +16,7 @@ export default defineConfig({
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Reference', link: '/reference/task-format' },
-      { text: 'Demo', link: '/demo' },
+      { text: 'Demo', link: '/demo.html', target: '_self' },
       { text: 'npm', link: 'https://www.npmjs.com/package/handback' },
     ],
 
@@ -33,12 +33,6 @@ export default defineConfig({
         items: [
           { text: 'Task format', link: '/reference/task-format' },
           { text: 'CLI', link: '/reference/cli' },
-        ],
-      },
-      {
-        text: ' ',
-        items: [
-          { text: 'Live demo', link: '/demo' },
         ],
       },
     ],
