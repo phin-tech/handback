@@ -241,7 +241,7 @@ export function applyAutoComplete(session: Session, results: Record<string, Chec
     const state = next.steps[step.id];
     const stepResults = results[step.id] ?? [];
     if (state.status !== "pending" || step.autoCompleteWhen !== "checks_pass" || stepResults.length === 0) continue;
-    if (stepResults.every((result) => result.status === "pass")) {
+    if (stepResults.every((result) => result.status === "pass" || (result.status === "unavailable" && Boolean(state.inputs[result.id])))) {
       next = applyHumanStepUpdate(next, { stepId: step.id, status: "done", inputs: state.inputs, selectedPath: state.selectedPath, now });
     }
   }

@@ -237,6 +237,9 @@ a.loc:hover { text-decoration: underline; }
 .check.pass .verdict { color: var(--done); }
 .check.fail .verdict { color: var(--warn); }
 .check.unavailable .verdict { color: var(--wait); }
+button.check { width: 100%; text-align: left; padding: 0; background: none; border: none; cursor: pointer; }
+button.check:not(:disabled):hover .glyph { filter: brightness(1.15); }
+button.check:disabled { cursor: default; }
 
 /* alternative / fallback paths */
 .paths { display: inline-flex; gap: 2px; margin: 14px 0 0; padding: 3px; background: var(--bg-2); border: 1px solid var(--rule-2); border-radius: 10px; }

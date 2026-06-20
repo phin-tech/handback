@@ -365,13 +365,29 @@
                 {#each step.checks as check}
                   {@const result = checks[step.id]?.find((c) => c.id === check.id)}
                   {@const cs = result?.status ?? "pending"}
-                  <div class={"check " + cs}>
-                    <span class="glyph">{cs === "pass" ? "✓" : cs === "fail" ? "✗" : cs === "unavailable" ? "?" : "◌"}</span>
-                    <span class="label">{check.label}</span>
-                    <span class="dots"></span>
-                    <span class="auto">auto</span>
-                    <span class="verdict">{cs}</span>
-                  </div>
+                  {#if cs === "unavailable"}
+                    {@const manual = Boolean(value(step.id, check.id))}
+                    <button
+                      type="button"
+                      disabled={finished || locked}
+                      class={"check manual" + (manual ? " pass" : "")}
+                      onclick={() => toggleConfirm(step.id, check.id)}
+                    >
+                      <span class="glyph">{manual ? "✓" : "?"}</span>
+                      <span class="label">{check.label}</span>
+                      <span class="dots"></span>
+                      <span class="auto">verify</span>
+                      <span class="verdict">{manual ? "verified" : "—"}</span>
+                    </button>
+                  {:else}
+                    <div class={"check " + cs}>
+                      <span class="glyph">{cs === "pass" ? "✓" : cs === "fail" ? "✗" : "◌"}</span>
+                      <span class="label">{check.label}</span>
+                      <span class="dots"></span>
+                      <span class="auto">auto</span>
+                      <span class="verdict">{cs}</span>
+                    </div>
+                  {/if}
                 {/each}
               </div>
             {/if}
