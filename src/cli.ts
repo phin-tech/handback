@@ -17,6 +17,7 @@ try {
   else if (command === "status") await status(args[1]);
   else if (command === "open") await open(args[1]);
   else if (command === "list") await list();
+  else if (command === "tee") await tee(args[1], args[2], args[3]);
   else help(command ? 1 : 0);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
@@ -78,6 +79,29 @@ async function waitForUrl(id: string) {
   throw new Error("Server did not start");
 }
 
+async function tee(id: string | undefined, stepId: string | undefined, inputId: string | undefined): Promise<void> {
+  if (!id || !stepId || !inputId) throw new Error("Usage: handback tee <session-id> <step-id> <input-id>");
+  const session = await store.load(id);
+  if (!session.port) throw new Error("Session server is not running");
+
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    process.stdout.write(chunk as Buffer);
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+  }
+  const output = Buffer.concat(chunks).toString("utf8");
+
+  const res = await fetch(`http://127.0.0.1:${session.port}/api/steps/${encodeURIComponent(stepId)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${session.token}` },
+    body: JSON.stringify({ inputs: { [inputId]: output } })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(`Failed to update step: ${err.error ?? res.status}`);
+  }
+}
+
 function help(code: number): never {
   console.error(`Usage:
   handback run <task.json>
@@ -85,7 +109,8 @@ function help(code: number): never {
   handback wait <session-id>
   handback status <session-id>
   handback open <session-id>
-  handback list`);
+  handback list
+  handback tee <session-id> <step-id> <input-id>`);
   process.exit(code);
 }
 

@@ -55,6 +55,20 @@ export async function serveSession(input: { id: string; sessionDir?: string; ope
           json(res, 200, buildResult(session));
           return;
         }
+        if (req.method === "PATCH" && url.pathname.startsWith("/api/steps/")) {
+          const stepId = decodeURIComponent(url.pathname.slice("/api/steps/".length));
+          const body = await readJson(req);
+          const commands = body.commands;
+          if (!Array.isArray(commands) || commands.some((c: unknown) => typeof c !== "string" || !c.trim())) {
+            return json(res, 400, { error: "commands must be a non-empty array of strings" });
+          }
+          const idx = session.task.steps.findIndex((s) => s.id === stepId);
+          if (idx === -1) return json(res, 404, { error: "step not found" });
+          const steps = session.task.steps.map((s) => (s.id === stepId ? { ...s, commands: commands as string[] } : s));
+          session = { ...session, task: { ...session.task, steps } };
+          await store.save(session);
+          return json(res, 200, publicSession(session));
+        }
         if (req.method === "POST" && url.pathname === "/api/agent/steps") {
           const body = await readJson(req);
           const parsed = StepSchema.safeParse(body);

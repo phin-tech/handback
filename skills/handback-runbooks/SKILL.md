@@ -23,7 +23,14 @@ sign-off. Don't use it for work the agent can do itself.
 2. Run it: `handback run task.json` — blocks until the human finishes, then prints the result
    JSON. (`handback start task.json` returns immediately with `{sessionId, url, token}` if you
    want to poll with `handback wait <id>` instead.)
-3. Read the result: each step reports `status` (`done` / `skipped` / `blocked` / `pending`),
+3. **Optionally pre-populate inputs** using `handback tee` — pipe a script's output directly
+   into a step's input field so the operator sees it pre-filled rather than having to copy-paste:
+   ```bash
+   SESSION=$(handback start release.json | jq -r .sessionId)
+   ./deploy.sh | handback tee $SESSION deploy output
+   handback wait $SESSION
+   ```
+4. Read the result: each step reports `status` (`done` / `skipped` / `blocked` / `pending`),
    an `outcome` (the path's label when a fallback path was taken, else the status), any
    `inputs`/confirm values the human entered, and `selectedPath`. Resume accordingly.
 
@@ -63,7 +70,18 @@ sign-off. Don't use it for work the agent can do itself.
   `links`/`confirms`. Give the fallback an `outcome` (e.g. `"rolled back"`) so the result
   records which route the human took. Needs ≥2 paths.
 - **`commands`** / **`links`** — shell snippets (rendered with a copy button) and reference
-  links.
+  links. Pair a command with a `textarea` input and a `handback tee` invocation so the operator
+  can run it and have the output land in the field automatically:
+  ```json
+  {
+    "id": "deploy",
+    "title": "Run the deploy",
+    "commands": ["./deploy.sh | handback tee hb_abc123 deploy output"],
+    "inputs": [{ "id": "output", "label": "Deploy output", "kind": "textarea" }]
+  }
+  ```
+  The operator copies the command, runs it in their terminal, and the output appears in the
+  textarea — no manual copy-paste.
 
 ## Rules of thumb
 

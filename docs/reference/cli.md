@@ -59,6 +59,16 @@ List all sessions.
 handback list
 ```
 
+### `handback tee <session-id> <step-id> <input-id>`
+
+Pipe a script's output into a specific input field on a step. Reads from stdin, writes to stdout (so it chains with other pipes), then POSTs the full output to the named input.
+
+```bash
+./deploy.sh | handback tee hb_abc123 deploy output
+```
+
+Useful when an agent runs a command and wants to capture the result into the runbook without manual copy-paste. The value lands in `result.steps[n].inputs[input-id]` when the session finishes.
+
 ## Environment variables
 
 | Variable | Default | Notes |

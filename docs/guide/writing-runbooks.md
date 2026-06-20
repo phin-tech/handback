@@ -104,6 +104,34 @@ Use `inputs` to capture information the agent needs after the handback. All inpu
 ]
 ```
 
+### Auto-populating inputs from a script
+
+Rather than asking the operator to manually copy-paste command output, pair a `commands` entry with a `handback tee` invocation. The operator copies the command from the checklist, runs it, and the output lands in the textarea automatically:
+
+```json
+{
+  "id": "deploy",
+  "title": "Run the deploy",
+  "commands": ["./deploy.sh | handback tee $SESSION_ID deploy output"],
+  "inputs": [{ "id": "output", "label": "Deploy output", "kind": "textarea" }]
+}
+```
+
+The agent can also pre-populate the field itself before the operator opens the step — useful when the agent already has the output:
+
+```bash
+# Start the session without blocking
+SESSION=$(handback start release.json | jq -r .sessionId)
+
+# Run a script and pipe its output into the step input
+./deploy.sh | handback tee $SESSION deploy output
+
+# Wait for the operator to finish
+handback wait $SESSION
+```
+
+`tee` reads stdin, writes to stdout (so it chains), and POSTs the accumulated text to the named input.
+
 ## Agent notes
 
 Use `note` for context the AI wants to pass to the human operator — gotchas, background, things to watch for. It renders as a collapsible "from the AI" callout so it's available without cluttering the view.
