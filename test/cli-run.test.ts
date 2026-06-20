@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -80,6 +80,52 @@ test("tee pipes stdin to stdout and writes it into the named step input", async 
     const statusRes = await fetch(started.url.replace("/?", "/api/status?"));
     const body = await statusRes.json() as { session: { steps: Record<string, { inputs: Record<string, string> }> } };
     assert.equal(body.session.steps["deploy"]?.inputs["output"], "hello from tee");
+  } finally {
+    if (starter.exitCode === null) starter.kill();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tee --file writes content to disk and stores the path in the input", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-tee-file-test-"));
+  const taskPath = join(dir, "task.json");
+  const logPath = join(dir, "output.log");
+  const task = {
+    title: "T",
+    steps: [{ id: "deploy", title: "Deploy", inputs: [{ id: "log", label: "Log file", kind: "text" }] }]
+  };
+  await writeFile(taskPath, JSON.stringify(task));
+
+  const starter = spawn(process.execPath, ["--import", "tsx", "src/cli.ts", "run", taskPath], {
+    cwd: process.cwd(),
+    env: { ...process.env, HANDBACK_HOME: dir, HANDBACK_OPEN: "0" },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  try {
+    let starterStderr = "";
+    starter.stderr.on("data", (chunk) => (starterStderr += String(chunk)));
+    const started = await waitFor(() => JSON.parse(starterStderr) as { sessionId: string; url: string; token: string });
+
+    const teeProc = spawn(
+      process.execPath,
+      ["--import", "tsx", "src/cli.ts", "tee", started.sessionId, "deploy", "log", "--file", logPath],
+      { cwd: process.cwd(), env: { ...process.env, HANDBACK_HOME: dir }, stdio: ["pipe", "pipe", "pipe"] }
+    );
+    teeProc.stdin.end("big log output");
+    let teeStdout = "";
+    teeProc.stdout.on("data", (chunk) => (teeStdout += String(chunk)));
+    const [teeCode] = (await once(teeProc, "exit")) as [number];
+    assert.equal(teeCode, 0);
+    assert.equal(teeStdout, "big log output");
+
+    // File should contain the content
+    assert.equal((await readFile(logPath, "utf8")), "big log output");
+
+    // Input should contain the file path, not the content
+    const statusRes = await fetch(started.url.replace("/?", "/api/status?"));
+    const body = await statusRes.json() as { session: { steps: Record<string, { inputs: Record<string, string> }> } };
+    assert.equal(body.session.steps["deploy"]?.inputs["log"], logPath);
   } finally {
     if (starter.exitCode === null) starter.kill();
     await rm(dir, { recursive: true, force: true });

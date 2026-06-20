@@ -70,18 +70,33 @@ sign-off. Don't use it for work the agent can do itself.
   `links`/`confirms`. Give the fallback an `outcome` (e.g. `"rolled back"`) so the result
   records which route the human took. Needs ≥2 paths.
 - **`commands`** / **`links`** — shell snippets (rendered with a copy button) and reference
-  links. Pair a command with a `textarea` input and a `handback tee` invocation so the operator
-  can run it and have the output land in the field automatically:
+  links. Pair a command with a `handback tee` invocation so the operator can run it and have
+  the output land in the field automatically — no manual copy-paste.
+
+  **Short output** (a few lines, a JSON blob, an ID): use a `textarea` and pipe straight into
+  the input. The content is stored in the result JSON and the agent can read it inline:
   ```json
   {
     "id": "deploy",
     "title": "Run the deploy",
-    "commands": ["./deploy.sh | handback tee hb_abc123 deploy output"],
+    "commands": ["./deploy.sh | handback tee $SESSION_ID deploy output"],
     "inputs": [{ "id": "output", "label": "Deploy output", "kind": "textarea" }]
   }
   ```
-  The operator copies the command, runs it in their terminal, and the output appears in the
-  textarea — no manual copy-paste.
+
+  **Large output** (full build logs, test runs, verbose traces): use `--file` and a `text`
+  input. The content is written to disk; only the file path goes into the result JSON. The
+  agent reads the file directly after the handback returns:
+  ```json
+  {
+    "id": "run-tests",
+    "title": "Run the test suite",
+    "commands": ["npm test | handback tee $SESSION_ID run-tests log --file /tmp/test.log"],
+    "inputs": [{ "id": "log", "label": "Test log path", "kind": "text" }]
+  }
+  ```
+  The agent then does `fs.readFile(result.steps.find(s => s.id === 'run-tests').inputs.log)`
+  to get the full output.
 
 ## Rules of thumb
 

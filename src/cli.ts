@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { createSession, buildResult, parseTask } from "./core.js";
 import { createSessionStore } from "./session-store.js";
@@ -80,7 +80,12 @@ async function waitForUrl(id: string) {
 }
 
 async function tee(id: string | undefined, stepId: string | undefined, inputId: string | undefined): Promise<void> {
-  if (!id || !stepId || !inputId) throw new Error("Usage: handback tee <session-id> <step-id> <input-id>");
+  if (!id || !stepId || !inputId) throw new Error("Usage: handback tee <session-id> <step-id> <input-id> [--file <path>]");
+
+  const fileIdx = args.indexOf("--file");
+  const filePath = fileIdx !== -1 ? args[fileIdx + 1] : undefined;
+  if (fileIdx !== -1 && !filePath) throw new Error("--file requires a path argument");
+
   const session = await store.load(id);
   if (!session.port) throw new Error("Session server is not running");
 
@@ -89,12 +94,20 @@ async function tee(id: string | undefined, stepId: string | undefined, inputId: 
     process.stdout.write(chunk as Buffer);
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
   }
-  const output = Buffer.concat(chunks).toString("utf8");
+  const content = Buffer.concat(chunks);
+
+  let inputValue: string;
+  if (filePath) {
+    await writeFile(filePath, content);
+    inputValue = filePath;
+  } else {
+    inputValue = content.toString("utf8");
+  }
 
   const res = await fetch(`http://127.0.0.1:${session.port}/api/steps/${encodeURIComponent(stepId)}`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${session.token}` },
-    body: JSON.stringify({ inputs: { [inputId]: output } })
+    body: JSON.stringify({ inputs: { [inputId]: inputValue } })
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({})) as { error?: string };
@@ -110,7 +123,7 @@ function help(code: number): never {
   handback status <session-id>
   handback open <session-id>
   handback list
-  handback tee <session-id> <step-id> <input-id>`);
+  handback tee <session-id> <step-id> <input-id> [--file <path>]`);
   process.exit(code);
 }
 

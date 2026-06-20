@@ -106,7 +106,9 @@ Use `inputs` to capture information the agent needs after the handback. All inpu
 
 ### Auto-populating inputs from a script
 
-Rather than asking the operator to manually copy-paste command output, pair a `commands` entry with a `handback tee` invocation. The operator copies the command from the checklist, runs it, and the output lands in the textarea automatically:
+Rather than asking the operator to manually copy-paste command output, pair a `commands` entry with a `handback tee` invocation. The operator copies the command from the checklist, runs it, and the output lands in the field automatically.
+
+**For short output** (a JSON blob, a version string, a few lines): pipe straight into a `textarea`. The content is stored in the result JSON and the agent reads it inline:
 
 ```json
 {
@@ -117,20 +119,24 @@ Rather than asking the operator to manually copy-paste command output, pair a `c
 }
 ```
 
-The agent can also pre-populate the field itself before the operator opens the step — useful when the agent already has the output:
+**For large output** (full build logs, test runs, verbose traces): use `--file` and a `text` input. The content is written to a file; only the path goes into the result JSON. The agent reads the file directly after the handback returns:
 
-```bash
-# Start the session without blocking
-SESSION=$(handback start release.json | jq -r .sessionId)
-
-# Run a script and pipe its output into the step input
-./deploy.sh | handback tee $SESSION deploy output
-
-# Wait for the operator to finish
-handback wait $SESSION
+```json
+{
+  "id": "run-tests",
+  "title": "Run the test suite",
+  "commands": ["npm test | handback tee $SESSION_ID run-tests log --file /tmp/test.log"],
+  "inputs": [{ "id": "log", "label": "Test log path", "kind": "text" }]
+}
 ```
 
-`tee` reads stdin, writes to stdout (so it chains), and POSTs the accumulated text to the named input.
+The agent can also pre-populate the field itself before the operator opens the step — useful when the agent has already run the command:
+
+```bash
+SESSION=$(handback start release.json | jq -r .sessionId)
+./deploy.sh | handback tee $SESSION deploy output
+handback wait $SESSION
+```
 
 ## Agent notes
 

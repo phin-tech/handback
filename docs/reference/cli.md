@@ -59,15 +59,19 @@ List all sessions.
 handback list
 ```
 
-### `handback tee <session-id> <step-id> <input-id>`
+### `handback tee <session-id> <step-id> <input-id> [--file <path>]`
 
-Pipe a script's output into a specific input field on a step. Reads from stdin, writes to stdout (so it chains with other pipes), then POSTs the full output to the named input.
+Pipe a script's output into a specific input field on a step. Reads from stdin, writes to stdout (so it chains with other pipes), then POSTs to the named input.
 
 ```bash
+# Store the output directly in the input field (good for short output)
 ./deploy.sh | handback tee hb_abc123 deploy output
+
+# Write the output to a file and store the file path in the input field (good for large logs)
+./deploy.sh | handback tee hb_abc123 deploy log --file /tmp/deploy.log
 ```
 
-Useful when an agent runs a command and wants to capture the result into the runbook without manual copy-paste. The value lands in `result.steps[n].inputs[input-id]` when the session finishes.
+Without `--file`, the full content is stored in the input field and returned in the result JSON. With `--file`, the content is written to that path and the path itself is stored in the input — keeping large logs out of the session JSON while still giving the agent something to read back.
 
 ## Environment variables
 
