@@ -132,6 +132,46 @@ test("tee --file writes content to disk and stores the path in the input", async
   }
 });
 
+test("run resolves plan by name from HANDBACK_PLANS and substitutes --var", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-plans-test-"));
+  const plansDir = join(dir, "plans");
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(plansDir);
+  await writeFile(
+    join(plansDir, "release.json"),
+    JSON.stringify({ title: "Release {{version}}", steps: [{ id: "s", title: "Step" }] })
+  );
+
+  const child = spawn(
+    process.execPath,
+    ["--import", "tsx", "src/cli.ts", "run", "release", "--var", "version=1.3.0"],
+    {
+      cwd: process.cwd(),
+      env: { ...process.env, HANDBACK_HOME: dir, HANDBACK_OPEN: "0", HANDBACK_PLANS: plansDir },
+      stdio: ["ignore", "pipe", "pipe"]
+    }
+  );
+
+  try {
+    let stderr = "";
+    child.stderr.on("data", (chunk) => (stderr += String(chunk)));
+    const started = await waitFor(() => JSON.parse(stderr) as { url: string });
+
+    const statusRes = await fetch(started.url.replace("/?", "/api/status?"));
+    const body = await statusRes.json() as { session: { task: { title: string } } };
+    assert.equal(body.session.task.title, "Release 1.3.0");
+
+    await fetch(started.url.replace("/?", "/api/finish?"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ outcome: "incomplete" })
+    });
+  } finally {
+    if (child.exitCode === null) child.kill();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 async function waitFor<T>(fn: () => T): Promise<T> {
   const deadline = Date.now() + 5000;
   let lastError: unknown;

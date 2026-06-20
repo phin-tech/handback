@@ -3,10 +3,13 @@ import test from "node:test";
 import {
   applyHumanStepUpdate,
   applyInputUpdate,
+  applyVars,
   buildResult,
   canFinish,
   createSession,
-  parseTask
+  parseRawTask,
+  parseTask,
+  resolveIncludes
 } from "../src/core.js";
 
 const task = parseTask({
@@ -169,4 +172,63 @@ test("buildResult records selectedPath and the path's outcome", () => {
   const result = buildResult(session);
   assert.equal(result.steps[0].selectedPath, "rollback");
   assert.equal(result.steps[0].outcome, "rolled back");
+});
+
+test("applyVars substitutes {{key}} placeholders", () => {
+  assert.equal(applyVars('{"pr": "{{pr}}"}', { pr: "42" }), '{"pr": "42"}');
+  assert.throws(() => applyVars("{{missing}}", {}), /Missing template variable/);
+});
+
+test("parseRawTask accepts include markers alongside normal steps", () => {
+  const raw = parseRawTask({
+    title: "T",
+    steps: [
+      { id: "prep", title: "Prep" },
+      { include: "smoke", as: "s", vars: { env: "staging" } }
+    ]
+  });
+  assert.equal(raw.steps.length, 2);
+  assert.ok("include" in raw.steps[1]);
+});
+
+test("resolveIncludes flattens sub-plan steps with namespace prefix", async () => {
+  const raw = parseRawTask({
+    title: "Release",
+    steps: [
+      { id: "prep", title: "Prep" },
+      { include: "smoke", as: "smoke" },
+      { id: "deploy", title: "Deploy", requires: ["smoke.verify"] }
+    ]
+  });
+
+  const subPlan = parseTask({ title: "Smoke", steps: [{ id: "verify", title: "Verify" }] });
+  const task = await resolveIncludes(raw, async () => subPlan);
+
+  assert.deepEqual(
+    task.steps.map((s) => s.id),
+    ["prep", "smoke.verify", "deploy"]
+  );
+  assert.deepEqual(task.steps[2].requires, ["smoke.verify"]);
+});
+
+test("resolveIncludes rewrites internal requires but leaves cross-plan requires alone", async () => {
+  const raw = parseRawTask({
+    title: "Release",
+    steps: [
+      { id: "prep", title: "Prep" },
+      { include: "smoke" }
+    ]
+  });
+
+  const subPlan = parseTask({
+    title: "Smoke",
+    steps: [
+      { id: "a", title: "A" },
+      { id: "b", title: "B", requires: ["a"] }
+    ]
+  });
+  const task = await resolveIncludes(raw, async () => subPlan);
+
+  assert.equal(task.steps[2].id, "smoke.b");
+  assert.deepEqual(task.steps[2].requires, ["smoke.a"]);
 });

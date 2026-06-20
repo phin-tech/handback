@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import { createSession, buildResult, parseTask } from "./core.js";
+import { createSession, buildResult, parseRawTask, resolveIncludes, applyVars, type Task } from "./core.js";
 import { createSessionStore } from "./session-store.js";
 import { openUrl } from "./server.js";
 
@@ -24,15 +25,15 @@ try {
   process.exit(1);
 }
 
-async function start(path: string | undefined): Promise<void> {
-  if (!path) throw new Error("Usage: handback start <task.json>");
-  const session = await startSession(path);
+async function start(nameOrPath: string | undefined): Promise<void> {
+  if (!nameOrPath) throw new Error("Usage: handback start <task.json|name> [--var key=value ...]");
+  const session = await startSession(nameOrPath, parseVars(args.slice(2)));
   console.log(JSON.stringify({ sessionId: session.id, url: session.url, token: session.token }, null, 2));
 }
 
-async function run(path: string | undefined): Promise<void> {
-  if (!path) throw new Error("Usage: handback run <task.json>");
-  const session = await startSession(path);
+async function run(nameOrPath: string | undefined): Promise<void> {
+  if (!nameOrPath) throw new Error("Usage: handback run <task.json|name> [--var key=value ...]");
+  const session = await startSession(nameOrPath, parseVars(args.slice(2)));
   console.error(JSON.stringify({ sessionId: session.id, url: session.url, token: session.token }, null, 2));
   await wait(session.id);
 }
@@ -117,18 +118,54 @@ async function tee(id: string | undefined, stepId: string | undefined, inputId: 
 
 function help(code: number): never {
   console.error(`Usage:
-  handback run <task.json>
-  handback start <task.json>
+  handback run <task.json|name> [--var key=value ...]
+  handback start <task.json|name> [--var key=value ...]
   handback wait <session-id>
   handback status <session-id>
   handback open <session-id>
   handback list
-  handback tee <session-id> <step-id> <input-id> [--file <path>]`);
+  handback tee <session-id> <step-id> <input-id> [--file <path>]
+
+  Names resolve from $HANDBACK_PLANS/<name>.json or .handback/<name>.json in the git root.
+  Template vars in task files use {{name}} syntax.`);
   process.exit(code);
 }
 
-async function startSession(path: string): Promise<{ id: string; url?: string; token: string }> {
-  const task = parseTask(JSON.parse(await readFile(path, "utf8")));
+function parseVars(argv: string[]): Record<string, string> {
+  const vars: Record<string, string> = {};
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--var" && i + 1 < argv.length) {
+      const eq = argv[i + 1].indexOf("=");
+      if (eq === -1) throw new Error(`--var requires key=value format, got: ${argv[i + 1]}`);
+      vars[argv[i + 1].slice(0, eq)] = argv[i + 1].slice(eq + 1);
+      i++;
+    }
+  }
+  return vars;
+}
+
+function findGitRoot(): string {
+  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" });
+  if (result.status !== 0) throw new Error("Not in a git repository (and HANDBACK_PLANS is not set)");
+  return result.stdout.trim();
+}
+
+async function resolvePlanPath(nameOrPath: string): Promise<string> {
+  if (nameOrPath.includes("/") || nameOrPath.endsWith(".json")) return nameOrPath;
+  const plansDir = process.env.HANDBACK_PLANS;
+  if (plansDir) return join(plansDir, `${nameOrPath}.json`);
+  return join(findGitRoot(), ".handback", `${nameOrPath}.json`);
+}
+
+async function loadTask(filePath: string, vars: Record<string, string>): Promise<Task> {
+  let json = await readFile(filePath, "utf8");
+  if (Object.keys(vars).length > 0) json = applyVars(json, vars);
+  const raw = parseRawTask(JSON.parse(json));
+  return resolveIncludes(raw, async (src, subVars) => loadTask(await resolvePlanPath(src), subVars));
+}
+
+async function startSession(nameOrPath: string, vars: Record<string, string>): Promise<{ id: string; url?: string; token: string }> {
+  const task = await loadTask(await resolvePlanPath(nameOrPath), vars);
   const id = `hb_${randomBytes(5).toString("base64url")}`;
   const token = randomBytes(18).toString("base64url");
   await store.save(createSession({ id, token, task, now: new Date().toISOString() }));

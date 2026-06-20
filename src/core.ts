@@ -122,6 +122,65 @@ export type CheckResult = {
   output?: string;
 };
 
+export const IncludeMarkerSchema = z.object({
+  include: z.string().min(1),
+  as: z.string().min(1).optional(),
+  vars: z.record(z.string(), z.string()).optional()
+});
+
+export const RawTaskSchema = z.object({
+  title: z.string().min(1),
+  steps: z.array(z.union([StepSchema, IncludeMarkerSchema])).min(1)
+});
+
+export type RawTask = z.infer<typeof RawTaskSchema>;
+export type IncludeMarker = z.infer<typeof IncludeMarkerSchema>;
+
+export function parseRawTask(input: unknown): RawTask {
+  return RawTaskSchema.parse(input);
+}
+
+export function applyVars(json: string, vars: Record<string, string>): string {
+  return json.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    if (!(key in vars)) throw new Error(`Missing template variable: {{${key}}}`);
+    return vars[key];
+  });
+}
+
+export async function resolveIncludes(
+  raw: RawTask,
+  loadPlan: (src: string, vars: Record<string, string>) => Promise<Task>
+): Promise<Task> {
+  const resolvedSteps: Step[] = [];
+
+  for (const entry of raw.steps) {
+    if ("include" in entry) {
+      const ns = entry.as ?? defaultNamespace(entry.include);
+      const subTask = await loadPlan(entry.include, entry.vars ?? {});
+      const subIds = new Set(subTask.steps.map((s) => s.id));
+      for (const step of subTask.steps) {
+        resolvedSteps.push(prefixStep(step, ns, subIds));
+      }
+    } else {
+      resolvedSteps.push(entry);
+    }
+  }
+
+  return parseTask({ title: raw.title, steps: resolvedSteps });
+}
+
+function defaultNamespace(src: string): string {
+  return src.replace(/.*\//, "").replace(/\.json$/, "");
+}
+
+function prefixStep(step: Step, ns: string, subIds: Set<string>): Step {
+  return {
+    ...step,
+    id: `${ns}.${step.id}`,
+    requires: step.requires?.map((r) => (subIds.has(r) ? `${ns}.${r}` : r))
+  };
+}
+
 export function parseTask(input: unknown): Task {
   const task = TaskSchema.parse(input);
   const ids = new Set<string>();
