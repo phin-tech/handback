@@ -16,7 +16,7 @@ export default defineConfig({
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Reference', link: '/reference/task-format' },
-      { text: 'Demo', link: '/demo.html', target: '_self' },
+      { text: 'Demo', link: '/demo.html', noIcon: true },
       { text: 'npm', link: 'https://www.npmjs.com/package/handback' },
     ],
 
