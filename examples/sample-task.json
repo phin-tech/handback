@@ -1,0 +1,63 @@
+{
+  "title": "Release handback",
+  "steps": [
+    {
+      "id": "review-pr",
+      "title": "Review the PR",
+      "body": "Open the PR, review the changes, and leave the review decision on GitHub.",
+      "links": [
+        {
+          "label": "Example PR",
+          "href": "https://github.com/phin-tech/test-repo/pull/96"
+        }
+      ],
+      "inputs": [
+        {
+          "id": "notes",
+          "label": "Review notes",
+          "kind": "textarea"
+        }
+      ],
+      "checks": [
+        {
+          "id": "approval",
+          "label": "GitHub review decision is APPROVED",
+          "kind": "github_pr_review_decision",
+          "owner": "phin-tech",
+          "repo": "test-repo",
+          "number": 96,
+          "expect": "APPROVED"
+        }
+      ],
+      "canCompleteWhen": "checks_pass",
+      "autoCompleteWhen": "checks_pass"
+    },
+    {
+      "id": "run-command",
+      "title": "Run the release command",
+      "requires": ["review-pr"],
+      "commands": ["aws sts get-caller-identity"],
+      "inputs": [
+        {
+          "id": "output",
+          "label": "Command output",
+          "kind": "textarea",
+          "required": true
+        },
+        {
+          "id": "environment",
+          "label": "Environment",
+          "kind": "select",
+          "options": ["staging", "production"],
+          "required": true
+        },
+        {
+          "id": "regions",
+          "label": "Regions",
+          "kind": "multiselect",
+          "options": ["us-east-1", "us-west-2"]
+        }
+      ]
+    }
+  ]
+}

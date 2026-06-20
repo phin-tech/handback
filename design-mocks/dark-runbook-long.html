@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>handback — dark runbook (ordered, deps, expandable)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#0a0c10; --bg-2:#11141a; --ink:#e9ebef; --ink-2:#aab1bd; --ink-3:#6b7280; --muted:#7d8593;
+    --rule:#1e232c; --rule-2:#2b313c;
+    --accent:#6ea8fe; --done:#4ade80; --done-soft:#10271a; --warn:#f0816a; --warn-soft:#2a1512;
+    --tool:#c98bdb; --tool-soft:#221329;
+    --sans:"Inter",ui-sans-serif,system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+
+  .topbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 16px; padding: 13px clamp(18px,6vw,56px); background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--rule); }
+  .brand { font-family: var(--mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+  .topbar h1 { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar .spacer { flex: 1; }
+  .meter { width: 130px; height: 4px; border-radius: 999px; background: var(--rule-2); overflow: hidden; }
+  .meter > span { display: block; height: 100%; background: var(--done); transition: width .3s; }
+  .count { font-family: var(--mono); font-size: 12px; color: var(--ink-2); min-width: 44px; }
+  .finish { font-size: 13px; font-weight: 600; color: #08110a; background: var(--done); border: none; padding: 7px 14px; border-radius: 8px; cursor: pointer; }
+  .finish:hover { filter: brightness(1.08); }
+  .finish:disabled { opacity: .4; cursor: not-allowed; }
+
+  .doc { max-width: 740px; margin: 0 auto; padding: 38px clamp(18px,6vw,56px) 140px; }
+  .doc-head { margin-bottom: 22px; }
+  .doc-head .kicker { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .doc-head h2 { margin: 6px 0 4px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; }
+  .doc-head .sub { color: var(--ink-2); font-size: 14px; max-width: 60ch; }
+
+  .step { position: relative; padding: 18px 0 18px 52px; border-top: 1px solid var(--rule); scroll-margin-top: 70px; }
+  .step:first-of-type { border-top: none; }
+  .step::before { content: ""; position: absolute; left: 13.5px; top: 48px; bottom: -18px; width: 1px; background: var(--rule); }
+  .step:last-of-type::before { display: none; }
+
+  .box { position: absolute; left: 0; top: 16px; width: 28px; height: 28px; border-radius: 8px; border: 1.5px solid var(--rule-2); background: var(--bg-2); display: grid; place-items: center; cursor: pointer; color: transparent; font-size: 15px; transition: background .14s, border-color .14s, color .14s, transform .1s; }
+  .box:hover { border-color: var(--ink-3); }
+  .box:active { transform: scale(.92); }
+  .box::after { content: "✓"; }
+
+  /* header is the click target for expand/collapse */
+  .step-head { display: flex; align-items: baseline; gap: 10px; cursor: pointer; user-select: none; }
+  .num { font-family: var(--mono); font-size: 14px; color: var(--muted); }
+  .title { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+  .loc { font-family: var(--mono); font-size: 12px; }
+  .loc.repo { color: var(--accent); }
+  .loc.tool { color: var(--tool); }
+  .head-spacer { flex: 1; }
+  .pill-state { font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .chev { color: var(--muted); font-size: 13px; transition: transform .18s; }
+  .step.collapsed .chev { transform: rotate(-90deg); }
+
+  .blockedby { margin: 8px 0 0; font-family: var(--mono); font-size: 12px; display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--rule-2); }
+  .blockedby .ic { font-size: 11px; }
+  .blockedby.unmet { color: var(--warn); background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 32%, var(--rule-2)); }
+  .blockedby.met { color: var(--muted); background: transparent; }
+  .blockedby.met .ic { color: var(--done); }
+
+  .more { position: relative; }
+  .more > button { border: none; background: none; cursor: pointer; color: var(--muted); font-size: 19px; line-height: 1; padding: 0 6px; border-radius: 6px; }
+  .more > button:hover { background: var(--bg-2); color: var(--ink); }
+  .menu { position: absolute; right: 0; top: 26px; z-index: 5; background: var(--bg-2); border: 1px solid var(--rule-2); border-radius: 10px; box-shadow: 0 14px 34px rgba(0,0,0,.5); padding: 6px; min-width: 150px; font-size: 14px; display: none; }
+  .more.open .menu { display: block; }
+  .menu button { display: block; width: 100%; text-align: left; border: none; background: none; padding: 8px 10px; border-radius: 6px; cursor: pointer; color: var(--ink); }
+  .menu button:hover { background: var(--rule); }
+  .menu button.warn { color: var(--warn); }
+
+  /* collapsible content wrapper */
+  .step-body { }
+  .step.collapsed .step-body { display: none; }
+
+  /* agent note — optional instructions from the AI, hidden behind a pill by default */
+  .ai-note { margin: 14px 0 0; }
+  .ai-note .who { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); padding: 4px 11px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--rule-2)); border-radius: 999px; background: color-mix(in srgb, var(--accent) 9%, var(--bg-2)); user-select: none; }
+  .ai-note .who:hover { background: color-mix(in srgb, var(--accent) 15%, var(--bg-2)); }
+  .ai-note .who .tw { font-size: 9px; transition: transform .18s; }
+  .ai-note.open .who .tw { transform: rotate(180deg); }
+  .ai-note .note-body { display: none; margin-top: 9px; padding: 11px 14px; border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--bg-2)); border-radius: 0 9px 9px 0; }
+  .ai-note.open .note-body { display: block; }
+  .ai-note p { margin: 0; color: var(--ink); font-size: 14px; }
+  .ai-note code { font-family: var(--mono); font-size: 12.5px; background: rgba(0,0,0,.25); border-radius: 4px; padding: 1px 5px; }
+
+  /* alternative / fallback paths — segmented switch swaps the instructions */
+  .paths { display: inline-flex; gap: 2px; margin: 14px 0 0; padding: 3px; background: var(--bg-2); border: 1px solid var(--rule-2); border-radius: 10px; }
+  .path-opt { font-size: 13px; color: var(--ink-2); background: transparent; border: none; padding: 5px 13px; border-radius: 7px; cursor: pointer; font-weight: 500; }
+  .path-opt:hover { color: var(--ink); }
+  .path-opt[aria-selected=true] { background: var(--rule-2); color: var(--ink); }
+  .path-opt[data-path=rollback][aria-selected=true] { background: var(--warn-soft); color: var(--warn); }
+  .path-pane[hidden] { display: none; }
+  .path-pane.fallback { margin-top: 11px; padding: 12px 14px; border-left: 2px solid var(--warn); background: color-mix(in srgb, var(--warn) 7%, var(--bg-2)); border-radius: 0 9px 9px 0; }
+  .path-pane.fallback .body { margin-top: 0; }
+  .step.alt .pill-state { color: var(--warn); }
+  .step.alt.done .box { background: var(--warn); border-color: var(--warn); }
+
+  .body { margin: 12px 0 0; color: var(--ink-2); max-width: 62ch; }
+  .body a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 38%, transparent); font-weight: 500; }
+  .body a:hover { border-bottom-color: var(--accent); }
+  .body code { font-family: var(--mono); font-size: 13px; background: var(--bg-2); border: 1px solid var(--rule); border-radius: 5px; padding: 1px 5px; color: var(--ink); }
+  .links { margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; }
+  .links a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 38%, transparent); font-weight: 500; }
+
+  .fence { position: relative; margin: 14px 0 0; }
+  .fence pre { margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.6; background: #05070a; color: #d4d9e0; padding: 13px 15px; border-radius: 10px; border: 1px solid var(--rule); overflow: auto; }
+  .fence pre .ln::before { content: "$ "; color: var(--done); }
+  .fence .copy { position: absolute; top: 8px; right: 8px; font-size: 11px; color: var(--ink-2); background: var(--rule); border: 1px solid var(--rule-2); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+  .fence .copy:hover { background: var(--rule-2); }
+
+  /* auto checks — system-owned. only "PR is merged" lives here now. */
+  .checks { margin: 16px 0 0; display: grid; gap: 9px; }
+  .check { display: flex; align-items: center; gap: 11px; font-family: var(--mono); font-size: 13px; }
+  .check .glyph { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 12px; flex: none; }
+  .check.pass .glyph { background: var(--done-soft); color: var(--done); }
+  .check.fail .glyph { background: var(--warn-soft); color: var(--warn); }
+  .check .label { color: var(--ink-2); }
+  .check .dots { flex: 1; border-bottom: 1px dotted var(--rule-2); transform: translateY(-3px); }
+  .check .verdict { font-weight: 600; }
+  .check.pass .verdict { color: var(--done); } .check.fail .verdict { color: var(--warn); }
+  .check .auto { font-family: var(--sans); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule-2); border-radius: 4px; padding: 1px 5px; }
+
+  /* operator confirmations — manual checkboxes the human ticks */
+  .confirm { margin: 14px 0 0; display: flex; align-items: center; gap: 10px; }
+  .confirm .toggle { width: 19px; height: 19px; border-radius: 6px; border: 1.5px solid var(--rule-2); background: var(--bg-2); cursor: pointer; display: grid; place-items: center; color: transparent; font-size: 12px; flex: none; }
+  .confirm .toggle[aria-pressed=true] { background: var(--done); border-color: var(--done); color: #08110a; }
+  .confirm .toggle::after { content: "✓"; }
+  .confirm label { cursor: pointer; color: var(--ink-2); font-size: 14px; }
+
+  .field { margin: 16px 0 0; padding-left: 14px; border-left: 2px solid var(--rule-2); }
+  .field > label { display: block; font-size: 12.5px; font-weight: 600; letter-spacing: .02em; color: var(--ink-2); margin-bottom: 6px; }
+  .field .req { color: var(--warn); }
+  .field input[type=text], .field textarea, .field select { width: 100%; font-family: var(--sans); font-size: 15px; color: var(--ink); background: transparent; border: none; border-bottom: 1px solid var(--rule); padding: 3px 0; resize: vertical; }
+  .field textarea { min-height: 28px; line-height: 1.5; }
+  .field input::placeholder, .field textarea::placeholder { color: var(--ink-3); }
+  .field input:hover, .field textarea:hover, .field select:hover { border-bottom-color: var(--rule-2); }
+  .field input:focus, .field textarea:focus, .field select:focus { outline: none; border-bottom: 1px solid var(--accent); }
+  .field select { cursor: pointer; appearance: none; padding-right: 18px; }
+  .field select option { background: var(--bg-2); }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { font-size: 13px; color: var(--ink-2); background: var(--bg-2); border: 1px solid var(--rule-2); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  .pill[aria-pressed=true] { color: var(--done); border-color: color-mix(in srgb, var(--done) 50%, var(--rule-2)); background: var(--done-soft); }
+
+  /* done / skipped — crossed off, still expandable to view */
+  .step.done .title { text-decoration: line-through; text-decoration-color: var(--rule-2); color: var(--muted); }
+  .step.done .box { background: var(--done); border-color: var(--done); color: #08110a; }
+  .step.done .blockedby { display: none; }
+  .step.skipped .title { text-decoration: line-through; text-decoration-color: var(--rule-2); color: var(--muted); }
+  .step.skipped .box::after { content: "–"; color: var(--muted); }
+  .step.skipped .box { background: var(--bg-2); }
+  .step.blocked .box { border-color: var(--warn); color: var(--warn); }
+  .step.blocked .box::after { content: "!"; }
+  .step.blocked .pill-state { color: var(--warn); }
+
+  /* locked — prerequisites open. greyed preview, can't check off. */
+  .step.locked .box { border-style: dashed; cursor: not-allowed; color: var(--muted); }
+  .step.locked .box::after { content: "–"; }
+  .step.locked .title { color: var(--ink-2); }
+  .step.locked .step-body { opacity: .5; }
+  .step.locked .step-body .field, .step.locked .step-body .pill, .step.locked .step-body .confirm .toggle, .step.locked .step-body .copy { pointer-events: none; }
+
+  .footer-note { max-width: 740px; margin: 0 auto; padding: 0 clamp(18px,6vw,56px); color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="brand">handback</span>
+    <h1>Ship v2.4 across services</h1>
+    <span class="spacer"></span>
+    <div class="meter"><span style="width:0%"></span></div>
+    <span class="count">0 / 5</span>
+    <button class="finish" disabled>Finish</button>
+  </div>
+
+  <main class="doc">
+    <header class="doc-head">
+      <div class="kicker">Runbook · returned by agent</div>
+      <h2>Ship v2.4 across services</h2>
+      <p class="sub">Work top to bottom. The migration gates the services, and orders has to be live before checkout calls it. Locked steps grey out until their blockers clear — click any step to expand it.</p>
+    </header>
+
+    <!-- 1 · migration (github) -->
+    <section class="step" data-step data-id="migrate" data-requires="">
+      <button class="box" title="Mark complete"></button>
+      <div class="step-head"><span class="num">1</span><span class="title">Apply the v2.4 DB migration</span><span class="loc repo">phin-tech/schema</span><span class="head-spacer"></span><span class="pill-state"></span><span class="chev">▾</span>
+        <div class="more"><button aria-label="More">⋯</button><div class="menu"><button data-act="done">Mark complete</button><button data-act="skipped">Skip step</button><button data-act="blocked" class="warn">Block step</button></div></div></div>
+      <div class="step-body">
+        <div class="ai-note"><span class="who">◆ agent note <span class="tw">▾</span></span><div class="note-body"><p>This migration is additive only — it adds <code>tenant_tier</code> and backfills nulls to <code>free</code>. Safe to run during traffic; no lock on <code>orders</code>.</p></div></div>
+        <p class="body">Run it against the primary, then sanity-check the row count.</p>
+        <div class="fence"><button class="copy">copy</button><pre><span class="ln">./migrate up --version 2.4</span></pre></div>
+        <div class="checks"><div class="check pass"><span class="glyph">✓</span><span class="label">phin-tech/schema#84 is merged</span><span class="dots"></span><span class="auto">auto</span><span class="verdict">pass</span></div></div>
+        <div class="confirm"><span class="toggle" role="checkbox" aria-pressed="false"></span><label>Migration applied cleanly on the primary</label></div>
+        <div class="field"><label>Rows affected</label><input type="text" placeholder="e.g. 0 (additive)" /></div>
+      </div>
+    </section>
+
+    <!-- 2 · orders service (github) -->
+    <section class="step" data-step data-id="orders" data-requires="migrate">
+      <button class="box" title="Mark complete"></button>
+      <div class="step-head"><span class="num">2</span><span class="title">Deploy orders service</span><span class="loc repo">phin-tech/orders-svc</span><span class="head-spacer"></span><span class="pill-state"></span><span class="chev">▾</span>
+        <div class="more"><button aria-label="More">⋯</button><div class="menu"><button data-act="done">Mark complete</button><button data-act="skipped">Skip step</button><button data-act="blocked" class="warn">Block step</button></div></div></div>
+      <span class="blockedby"></span>
+      <div class="step-body">
+        <p class="body">Reads <code>tenant_tier</code>, so it has to go out after the migration.</p>
+        <div class="fence"><button class="copy">copy</button><pre><span class="ln">./deploy orders --tag v2.4</span></pre></div>
+        <div class="checks"><div class="check pass"><span class="glyph">✓</span><span class="label">phin-tech/orders-svc#88 is merged</span><span class="dots"></span><span class="auto">auto</span><span class="verdict">pass</span></div></div>
+        <div class="confirm"><span class="toggle" role="checkbox" aria-pressed="false"></span><label>orders /healthz returns 200 after rollout</label></div>
+      </div>
+    </section>
+
+    <!-- 3 · feature flag (non-github tool) -->
+    <section class="step" data-step data-id="flag" data-requires="orders">
+      <button class="box" title="Mark complete"></button>
+      <div class="step-head"><span class="num">3</span><span class="title">Turn on tiered pricing</span><span class="loc tool">LaunchDarkly · production</span><span class="head-spacer"></span><span class="pill-state"></span><span class="chev">▾</span>
+        <div class="more"><button aria-label="More">⋯</button><div class="menu"><button data-act="done">Mark complete</button><button data-act="skipped">Skip step</button><button data-act="blocked" class="warn">Block step</button></div></div></div>
+      <span class="blockedby"></span>
+      <div class="step-body">
+        <div class="ai-note"><span class="who">◆ agent note <span class="tw">▾</span></span><div class="note-body"><p>Ramp to <code>10%</code> first and watch the orders error rate for ~5 min before going to 100%. If anything spikes, kill the flag — it's safe to toggle off, the old path still works.</p></div></div>
+        <p class="body">Flip <code>tiered_pricing</code> for production. If the ramp misbehaves, switch to the fallback.</p>
+        <div class="paths" role="tablist">
+          <button class="path-opt" data-path="ramp" data-outcome="" aria-selected="true">Ramp the flag</button>
+          <button class="path-opt" data-path="rollback" data-outcome="rolled back" aria-selected="false">↩ Roll back</button>
+        </div>
+        <div class="path-pane" data-path="ramp">
+          <div class="links"><a href="#" target="_blank" rel="noreferrer">LaunchDarkly flag ↗</a><a href="#" target="_blank" rel="noreferrer">orders error-rate dashboard ↗</a></div>
+          <div class="confirm"><span class="toggle" role="checkbox" aria-pressed="false"></span><label>Flag at 100%, error rate steady</label></div>
+        </div>
+        <div class="path-pane fallback" data-path="rollback" hidden>
+          <p class="body">Toggle the flag <b>off</b> — checkout falls back to flat pricing and stays healthy. The merge check will stay red; that's expected for the fallback. Open a follow-up so we can retry the ramp later.</p>
+          <div class="links"><a href="#" target="_blank" rel="noreferrer">Open follow-up issue ↗</a></div>
+          <div class="confirm"><span class="toggle" role="checkbox" aria-pressed="false"></span><label>Flag is off, service healthy</label></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 · checkout service (github) -->
+    <section class="step" data-step data-id="checkout" data-requires="migrate,orders">
+      <button class="box" title="Mark complete"></button>
+      <div class="step-head"><span class="num">4</span><span class="title">Deploy checkout service</span><span class="loc repo">phin-tech/checkout-svc</span><span class="head-spacer"></span><span class="pill-state"></span><span class="chev">▾</span>
+        <div class="more"><button aria-label="More">⋯</button><div class="menu"><button data-act="done">Mark complete</button><button data-act="skipped">Skip step</button><button data-act="blocked" class="warn">Block step</button></div></div></div>
+      <span class="blockedby"></span>
+      <div class="step-body">
+        <p class="body">Calls orders for tier pricing — needs the migration and orders live first.</p>
+        <div class="fence"><button class="copy">copy</button><pre><span class="ln">./deploy checkout --tag v2.4</span></pre></div>
+        <div class="checks"><div class="check pass"><span class="glyph">✓</span><span class="label">phin-tech/checkout-svc#91 is merged</span><span class="dots"></span><span class="auto">auto</span><span class="verdict">pass</span></div></div>
+        <div class="confirm"><span class="toggle" role="checkbox" aria-pressed="false"></span><label>A test checkout completed end-to-end</label></div>
+        <div class="field"><label>Deploy notes</label><textarea placeholder="Anything worth recording…"></textarea></div>
+      </div>
+    </section>
+
+    <!-- 5 · wrap up (non-github tools) -->
+    <section class="step" data-step data-id="wrap" data-requires="flag,checkout">
+      <button class="box" title="Mark complete"></button>
+      <div class="step-head"><span class="num">5</span><span class="title">Announce &amp; close out</span><span class="loc tool">Slack · Linear</span><span class="head-spacer"></span><span class="pill-state"></span><span class="chev">▾</span>
+        <div class="more"><button aria-label="More">⋯</button><div class="menu"><button data-act="done">Mark complete</button><button data-act="skipped">Skip step</button><button data-act="blocked" class="warn">Block step</button></div></div></div>
+      <span class="blockedby"></span>
+      <div class="step-body">
+        <p class="body">Post the release note and move the ticket to Done.</p>
+        <div class="links"><a href="#" target="_blank" rel="noreferrer">#releases ↗</a><a href="#" target="_blank" rel="noreferrer">PHIN-2041 ↗</a></div>
+        <div class="confirm"><span class="toggle" role="checkbox" aria-pressed="false"></span><label>Posted in #releases</label></div>
+        <div class="confirm"><span class="toggle" role="checkbox" aria-pressed="false"></span><label>Linear ticket moved to Done</label></div>
+        <div class="field"><label>Release note link</label><input type="text" placeholder="https://…" /></div>
+      </div>
+    </section>
+  </main>
+
+  <p class="footer-note">Mock — static sample data. Steps 2–5 start locked &amp; greyed; complete a blocker to unlock its dependents. Click a step header to expand/collapse — completed steps stay viewable.</p>
+
+<script>
+  const steps = [...document.querySelectorAll('[data-step]')];
+  const byId = {}, num = {};
+  steps.forEach((s, i) => { byId[s.dataset.id] = s; num[s.dataset.id] = i + 1; });
+  const meter = document.querySelector('.meter > span');
+  const count = document.querySelector('.count');
+  const finish = document.querySelector('.finish');
+  const closed = s => s.classList.contains('done') || s.classList.contains('skipped');
+
+  function recompute() {
+    steps.forEach(s => {
+      const reqs = (s.dataset.requires || '').split(',').filter(Boolean);
+      const unmet = reqs.filter(r => !closed(byId[r]));
+      const wasLocked = s.dataset.locked === '1';
+      const locked = unmet.length > 0 && !closed(s) && !s.classList.contains('blocked');
+      s.classList.toggle('locked', locked);
+      s.dataset.locked = locked ? '1' : '0';
+      if (wasLocked && !locked && !closed(s)) s.classList.remove('collapsed'); // just unlocked → reveal
+      const chip = s.querySelector('.blockedby');
+      if (chip) {
+        if (unmet.length) { chip.className = 'blockedby unmet'; chip.innerHTML = '<span class="ic">🔒</span> blocked by ' + unmet.map(r => num[r]).join(', '); }
+        else { chip.className = 'blockedby met'; chip.innerHTML = '<span class="ic">✓</span> after ' + reqs.map(r => num[r]).join(', '); }
+      }
+    });
+    const done = steps.filter(closed).length;
+    meter.style.width = (done / steps.length * 100) + '%';
+    count.textContent = done + ' / ' + steps.length;
+    finish.disabled = done !== steps.length;
+  }
+  function chosenOutcome(step) {
+    const sel = step.querySelector('.path-opt[aria-selected=true]');
+    return sel ? sel.dataset.outcome : '';
+  }
+  function setState(step, state) {
+    step.classList.remove('done', 'skipped', 'blocked', 'alt');
+    const pill = step.querySelector('.pill-state');
+    if (state) {
+      step.classList.add(state);
+      const alt = state === 'done' ? chosenOutcome(step) : '';
+      if (alt) step.classList.add('alt');
+      pill.textContent = alt || state;
+      step.classList.add('collapsed'); // tuck away when closed
+    } else { pill.textContent = ''; step.classList.remove('collapsed'); }
+    recompute();
+  }
+  steps.forEach(step => {
+    // collapse everything that isn't the first actionable step
+    if (step.dataset.id !== 'migrate') step.classList.add('collapsed');
+    step.querySelector('.box').addEventListener('click', e => {
+      e.stopPropagation();
+      if (step.classList.contains('locked')) return;
+      setState(step, step.classList.contains('done') ? '' : 'done');
+    });
+    step.querySelector('.step-head').addEventListener('click', () => step.classList.toggle('collapsed'));
+    const more = step.querySelector('.more');
+    more.querySelector('button').addEventListener('click', e => { e.stopPropagation(); more.classList.toggle('open'); });
+    more.querySelectorAll('.menu button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); setState(step, b.dataset.act); more.classList.remove('open'); }));
+  });
+  document.addEventListener('click', () => document.querySelectorAll('.more.open').forEach(m => m.classList.remove('open')));
+  function toggleAttr(el) { el.setAttribute('aria-pressed', el.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); }
+  document.querySelectorAll('.pill').forEach(p => p.addEventListener('click', () => toggleAttr(p)));
+  document.querySelectorAll('.confirm .toggle').forEach(t => t.addEventListener('click', () => toggleAttr(t)));
+  document.querySelectorAll('.confirm label').forEach(l => l.addEventListener('click', () => toggleAttr(l.previousElementSibling)));
+  document.querySelectorAll('.ai-note .who').forEach(w => w.addEventListener('click', e => { e.stopPropagation(); w.closest('.ai-note').classList.toggle('open'); }));
+  document.querySelectorAll('.paths').forEach(group => {
+    const opts = [...group.querySelectorAll('.path-opt')];
+    const panes = [...group.parentElement.querySelectorAll('.path-pane')];
+    opts.forEach(opt => opt.addEventListener('click', e => {
+      e.stopPropagation();
+      opts.forEach(o => o.setAttribute('aria-selected', o === opt ? 'true' : 'false'));
+      panes.forEach(p => p.hidden = p.dataset.path !== opt.dataset.path);
+    }));
+  });
+  document.querySelectorAll('.fence .copy').forEach(c => c.addEventListener('click', e => { e.stopPropagation(); c.textContent = 'copied'; setTimeout(() => c.textContent = 'copy', 1200); }));
+  recompute();
+</script>
+</body>
+</html>
