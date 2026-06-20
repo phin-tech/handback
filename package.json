@@ -1,16 +1,42 @@
 {
   "name": "handback",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Hand control from an agent to a human via a local web runbook.",
   "type": "module",
   "license": "MIT",
   "bin": {
     "handback": "./dist/src/cli.js"
   },
+  "files": [
+    "dist/src",
+    "dist/ui",
+    "examples"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phin-tech/handback.git"
+  },
+  "homepage": "https://github.com/phin-tech/handback#readme",
+  "bugs": {
+    "url": "https://github.com/phin-tech/handback/issues"
+  },
+  "keywords": [
+    "agent",
+    "human-in-the-loop",
+    "runbook",
+    "checklist",
+    "cli",
+    "ai"
+  ],
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -p tsconfig.json && vite build",
     "test": "node --import tsx --test test/*.test.ts",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "zod": "^4.2.1"
