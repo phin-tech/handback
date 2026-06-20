@@ -2,6 +2,7 @@
   "name": "handback",
   "version": "0.0.0",
   "type": "module",
+  "license": "MIT",
   "bin": {
     "handback": "./dist/src/cli.js"
   },
