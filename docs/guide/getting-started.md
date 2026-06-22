@@ -91,6 +91,21 @@ Work through the steps top to bottom. Steps with `requires` stay locked until th
 
 The agent reads this and resumes.
 
+## Blocking vs. background
+
+`handback run` blocks: it stays in the foreground until you click Finish, then prints the result JSON. That's the simplest mode and the right one when waiting is fine.
+
+When the agent has other work to do while you take your time on the runbook, it can run the session in the background instead — the same pattern you'd use to background a long build or a `git` fetch:
+
+```bash
+SESSION=$(handback start task.json | jq -r .sessionId)
+handback wait "$SESSION"   # blocks, then prints the result JSON
+```
+
+- `handback start` opens the session and returns immediately with `{ sessionId, url, token }`.
+- `handback wait <id>` is the poller — a blocking shell command that waits for you to finish, then prints the same result JSON to stdout. An agent launches it as a background command and gets woken with the result.
+- `handback status <id>` is a one-shot, non-blocking peek at the current session state.
+
 ## What goes in a step
 
 | Piece | What it's for |

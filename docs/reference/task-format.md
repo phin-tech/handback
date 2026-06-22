@@ -90,7 +90,7 @@ The first path is the default. Selecting a path with an `outcome` and completing
 
 ## Result
 
-Printed by `handback run` to stdout; read by the agent.
+Printed to stdout by `handback run` (blocking) or `handback wait <id>` (background poll); read by the agent.
 
 ```json
 {

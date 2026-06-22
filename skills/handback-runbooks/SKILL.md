@@ -20,9 +20,9 @@ sign-off. Don't use it for work the agent can do itself.
 
 1. Write a task JSON file (see shape below; full reference in
    [`docs/reference/task-format.md`](../../docs/reference/task-format.md)).
-2. Run it: `handback run task.json` — blocks until the human finishes, then prints the result
-   JSON. (`handback start task.json` returns immediately with `{sessionId, url, token}` if you
-   want to poll with `handback wait <id>` instead.)
+2. **Run it** — pick a mode (see [Two modes](#two-modes-block-or-poll-in-the-background)
+   below): `handback run task.json` to block inline, or `handback start task.json` plus a
+   background poller so you can keep working while the human does the runbook.
 3. **Optionally pre-populate inputs** using `handback tee` — pipe a script's output directly
    into a step's input field so the operator sees it pre-filled rather than having to copy-paste:
    ```bash
@@ -33,6 +33,30 @@ sign-off. Don't use it for work the agent can do itself.
 4. Read the result: each step reports `status` (`done` / `skipped` / `blocked` / `pending`),
    an `outcome` (the path's label when a fallback path was taken, else the status), any
    `inputs`/confirm values the human entered, and `selectedPath`. Resume accordingly.
+
+## Two modes: block, or poll in the background
+
+Both modes open the same UI and produce the same result JSON. Choose by whether you have other
+work to do while the human works the runbook.
+
+**Blocking** — `handback run task.json`. The command stays in the foreground and exits when the
+human clicks Finish, printing the result JSON to stdout (the `{sessionId, url, token}` line goes
+to stderr). Use this when the handback is the only thing left to do and waiting is fine.
+
+**Background** — start the session, then poll with a shell command, the same way you'd background
+a long build or a `git` fetch and get woken when it finishes:
+
+```bash
+SESSION=$(handback start task.json | jq -r .sessionId)
+handback wait "$SESSION"   # run in the background: blocks, then prints the result JSON
+```
+
+`handback start` returns immediately with `{sessionId, url, token}`. `handback wait <id>` is the
+poller — a blocking shell command that sits until the human finishes and then prints the result
+to stdout. Launch it as a **background command** so the harness wakes you with the result while
+you carry on with other work; don't busy-loop it yourself. If you just want a one-shot,
+non-blocking peek at progress instead of a blocking wait, `handback status <id>` prints the
+current session state and exits.
 
 ## Minimal task
 
