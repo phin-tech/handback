@@ -291,8 +291,8 @@ button.check:disabled { cursor: default; }
 .pill[aria-pressed="true"] { color: var(--done); border-color: color-mix(in srgb, var(--done) 50%, var(--rule-2)); background: var(--done-soft); }
 
 /* step Q&A */
-.ask { margin: 14px 0 0; display: grid; gap: 10px; min-width: 0; padding-left: 16px; border-left: 1px solid var(--rule); }
-.thread { display: grid; gap: 8px; }
+.ask { margin: 14px 0 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 10px; min-width: 0; max-height: 360px; padding-left: 16px; border-left: 1px solid var(--rule); }
+.thread { display: grid; gap: 8px; min-height: 0; overflow-y: auto; padding-right: 4px; }
 .turn { display: grid; gap: 2px; max-width: 100%; }
 .turn span { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .turn p { width: fit-content; max-width: 100%; margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
