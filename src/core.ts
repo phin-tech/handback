@@ -266,14 +266,20 @@ export function applyInputUpdate(
   const current = session.steps[input.stepId];
   if (!current) throw new Error(`Missing state for step: ${input.stepId}`);
 
+  const nextInputs = { ...current.inputs, ...(input.inputs ?? {}) };
+  const nextSelectedPath = input.selectedPath ?? current.selectedPath;
+  if (current.status === "pending" && hasRequiredFields(step, nextSelectedPath) && requiredFieldsSet(step, nextInputs, nextSelectedPath)) {
+    return applyHumanStepUpdate(session, { stepId: input.stepId, status: "done", inputs: nextInputs, selectedPath: nextSelectedPath, now: input.now });
+  }
+
   return {
     ...session,
     steps: {
       ...session.steps,
       [input.stepId]: {
         ...current,
-        inputs: { ...current.inputs, ...(input.inputs ?? {}) },
-        selectedPath: input.selectedPath ?? current.selectedPath,
+        inputs: nextInputs,
+        selectedPath: nextSelectedPath,
         updatedAt: input.now
       }
     }
@@ -339,6 +345,19 @@ function effectivePath(step: Step, selectedPath?: string): Path | undefined {
 function stepOutcome(step: Step, state: StepState): string {
   if (state.status !== "done") return state.status;
   return effectivePath(step, state.selectedPath)?.outcome ?? "done";
+}
+
+function hasRequiredFields(step: Step, selectedPath?: string): boolean {
+  return Boolean(step.inputs?.some((input) => input.required) || step.confirms?.some((confirm) => confirm.required) || effectivePath(step, selectedPath)?.confirms?.some((confirm) => confirm.required));
+}
+
+function requiredFieldsSet(step: Step, inputs: Record<string, InputValue>, selectedPath?: string): boolean {
+  try {
+    assertRequiredFields(step, inputs, selectedPath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function assertRequiredFields(step: Step, inputs: Record<string, InputValue>, selectedPath?: string): void {

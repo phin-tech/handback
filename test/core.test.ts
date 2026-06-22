@@ -165,6 +165,58 @@ test("applyInputUpdate merges inputs and path without changing status", () => {
   assert.equal(next.steps.deploy.selectedPath, "rollback");
 });
 
+test("applyInputUpdate auto-completes a pending step once every required field is set", () => {
+  const requiredTask = parseTask({
+    title: "T",
+    steps: [
+      {
+        id: "s",
+        title: "S",
+        inputs: [
+          { id: "summary", label: "Summary", kind: "text", required: true },
+          { id: "notes", label: "Notes", kind: "textarea", required: true },
+          { id: "approved", label: "Approved", kind: "checkbox", required: true },
+          { id: "env", label: "Env", kind: "select", options: ["staging", "prod"], required: true },
+          { id: "regions", label: "Regions", kind: "multiselect", options: ["us", "eu"], required: true },
+          { id: "optional", label: "Optional", kind: "text" }
+        ],
+        confirms: [{ id: "confirmed", label: "Confirmed", required: true }],
+        paths: [
+          { id: "ship", label: "Ship" },
+          { id: "rollback", label: "Rollback", confirms: [{ id: "rolled_back", label: "Rolled back", required: true }] }
+        ]
+      }
+    ]
+  });
+
+  let session = createSession({ id: "hb", token: "t", now: "t0", task: requiredTask });
+
+  session = applyInputUpdate(session, {
+    stepId: "s",
+    selectedPath: "rollback",
+    inputs: {
+      summary: "done",
+      notes: "details",
+      approved: true,
+      env: "prod",
+      regions: ["us"],
+      confirmed: true
+    },
+    now: "t1"
+  });
+
+  assert.equal(session.steps.s.status, "pending");
+
+  session = applyInputUpdate(session, {
+    stepId: "s",
+    inputs: { rolled_back: true },
+    now: "t2"
+  });
+
+  assert.equal(session.steps.s.status, "done");
+  assert.equal(session.steps.s.completedAt, "t2");
+});
+
 test("buildResult records selectedPath and the path's outcome", () => {
   let session = createSession({ id: "hb_adv", token: "t", now: "now", task: advancedTask });
   session = applyHumanStepUpdate(session, { stepId: "deploy", status: "done", inputs: { healthz: true, off: true }, selectedPath: "rollback", now: "t1" });
