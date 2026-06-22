@@ -38,7 +38,7 @@
     "build": "tsc -p tsconfig.json && npm run gen:schema && vite build",
     "gen:schema": "node --import tsx scripts/gen-schema.mjs",
     "postinstall": "node scripts/postinstall.mjs",
-    "release": "npm test && npm run build && git diff --exit-code && gh release create \"v$(node -p \\\"require('./package.json').version\\\")\" --generate-notes",
+    "release": "npm test && npm run build && test -z \"$(git status --porcelain)\" && gh release create \"v$(node -p 'require(\"./package.json\").version')\" --generate-notes",
     "test": "node --import tsx --test test/*.test.ts",
     "test:uat": "npm run build && node scripts/uat.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",

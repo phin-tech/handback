@@ -38,9 +38,11 @@ test("package release script creates a GitHub release and does not publish local
 
   assert.match(release, /npm test/);
   assert.match(release, /npm run build/);
-  assert.match(release, /git diff --exit-code/);
+  assert.match(release, /git status --porcelain/);
   assert.match(release, /gh release create/);
   assert.doesNotMatch(release, /npm publish/);
+  assert.doesNotMatch(release, /node -p \\\\"/);
+  assert.match(release, /node -p 'require\("\.\/package\.json"\)\.version'/);
 });
 
 test("postinstall prints handback doctor hint", async () => {
