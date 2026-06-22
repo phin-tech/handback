@@ -109,7 +109,7 @@ h1, h2, p { margin: 0; }
 .finish:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ---- document ----------------------------------------------------------- */
-.doc { max-width: 740px; margin: 0 auto; padding: 38px clamp(18px, 6vw, 56px) 80px; }
+.doc { max-width: 1080px; margin: 0 auto; padding: 38px clamp(18px, 6vw, 56px) 80px; }
 .doc-head { margin-bottom: 22px; }
 .doc-head .kicker { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .doc-head h2 { margin-top: 6px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; }
@@ -188,7 +188,13 @@ a.loc:hover { text-decoration: underline; }
 .blockedby.met { color: var(--muted); background: transparent; }
 .blockedby.met .ic { color: var(--done); }
 
-.step-body { /* collapsible content wrapper */ }
+.step-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 24px;
+  align-items: start;
+}
+.step-main { min-width: 0; }
 
 /* agent note — hidden behind a pill by default */
 .ai-note { margin: 14px 0 0; }
@@ -285,9 +291,9 @@ button.check:disabled { cursor: default; }
 .pill[aria-pressed="true"] { color: var(--done); border-color: color-mix(in srgb, var(--done) 50%, var(--rule-2)); background: var(--done-soft); }
 
 /* step Q&A */
-.ask { margin: 18px 0 0; display: grid; gap: 10px; }
+.ask { margin: 14px 0 0; display: grid; gap: 10px; min-width: 0; padding-left: 16px; border-left: 1px solid var(--rule); }
 .thread { display: grid; gap: 8px; }
-.turn { display: grid; gap: 2px; max-width: 92%; }
+.turn { display: grid; gap: 2px; max-width: 100%; }
 .turn span { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .turn p { width: fit-content; max-width: 100%; margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
 .turn.human { justify-self: end; text-align: right; }
@@ -307,6 +313,12 @@ button.check:disabled { cursor: default; }
 .ask-row button { color: var(--ink); background: var(--bg-2); border: 1px solid var(--rule-2); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
 .ask-row button:hover { border-color: var(--ink-3); }
 .ask-row button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@media (max-width: 860px) {
+  .doc { max-width: 740px; }
+  .step-body { display: block; }
+  .ask { padding-left: 0; border-left: none; }
+}
 
 /* states */
 .step.done .title { text-decoration: line-through; text-decoration-color: var(--rule-2); color: var(--muted); }

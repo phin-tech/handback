@@ -338,132 +338,134 @@
 
         {#if !collapsedStep}
           <div class="step-body">
-            {#if step.note}
-              <div class="ai-note" class:open={noteOpen[step.id]}>
-                <button type="button" class="who" onclick={(e) => (e.stopPropagation(), (noteOpen[step.id] = !noteOpen[step.id]))}
-                  >◆ agent note <span class="tw">▾</span></button>
-                <div class="note-body"><p>{step.note}</p></div>
-              </div>
-            {/if}
-
-            {#if step.body}<p class="body">{step.body}</p>{/if}
-
-            {#if step.links?.length}
-              <div class="links">{#each step.links as link}<a href={link.href} target="_blank" rel="noreferrer">{link.label}</a>{/each}</div>
-            {/if}
-
-            {#if step.commands?.length}
-              {#each step.commands as command}
-                <div class="fence"><button class="copy" onclick={(e) => copy(command, e)}>copy</button><pre>{command}</pre></div>
-              {/each}
-            {/if}
-
-            {#if step.checks?.length}
-              <div class="checks">
-                {#each step.checks as check}
-                  {@const result = checks[step.id]?.find((c) => c.id === check.id)}
-                  {@const cs = result?.status ?? "pending"}
-                  {#if cs === "unavailable"}
-                    {@const manual = Boolean(value(step.id, check.id))}
-                    <button
-                      type="button"
-                      disabled={finished || locked}
-                      class={"check manual" + (manual ? " pass" : "")}
-                      onclick={() => toggleConfirm(step.id, check.id)}
-                    >
-                      <span class="glyph">{manual ? "✓" : "?"}</span>
-                      <span class="label">{check.label}</span>
-                      <span class="dots"></span>
-                      <span class="auto">verify</span>
-                      <span class="verdict">{manual ? "verified" : "—"}</span>
-                    </button>
-                  {:else}
-                    <div class={"check " + cs}>
-                      <span class="glyph">{cs === "pass" ? "✓" : cs === "fail" ? "✗" : "◌"}</span>
-                      <span class="label">{check.label}</span>
-                      <span class="dots"></span>
-                      <span class="auto">auto</span>
-                      <span class="verdict">{cs}</span>
-                    </div>
-                  {/if}
-                {/each}
-              </div>
-            {/if}
-
-            {#if step.paths?.length}
-              <div class="paths" role="tablist">
-                {#each step.paths as p}
-                  <button
-                    type="button"
-                    role="tab"
-                    class="path-opt"
-                    class:fallback={Boolean(p.outcome)}
-                    aria-selected={activePathId === p.id}
-                    onclick={(e) => (e.stopPropagation(), selectPath(step.id, p.id))}>{p.label}</button>
-                {/each}
-              </div>
-              {#if ap}
-                <div class="path-pane" class:fallback={Boolean(ap.outcome)}>
-                  {#if ap.body}<p class="body">{ap.body}</p>{/if}
-                  {#if ap.links?.length}
-                    <div class="links">{#each ap.links as link}<a href={link.href} target="_blank" rel="noreferrer">{link.label}</a>{/each}</div>
-                  {/if}
-                  {#if ap.commands?.length}
-                    {#each ap.commands as command}
-                      <div class="fence"><button class="copy" onclick={(e) => copy(command, e)}>copy</button><pre>{command}</pre></div>
-                    {/each}
-                  {/if}
-                  {#if ap.confirms?.length}
-                    {#each ap.confirms as c}
-                      <button type="button" class="confirm" role="checkbox" aria-checked={Boolean(value(step.id, c.id))} onclick={() => toggleConfirm(step.id, c.id)}>
-                        <span class="toggle"></span>
-                        <span class="confirm-label">{c.label}{c.required ? " *" : ""}</span>
-                      </button>
-                    {/each}
-                  {/if}
+            <div class="step-main">
+              {#if step.note}
+                <div class="ai-note" class:open={noteOpen[step.id]}>
+                  <button type="button" class="who" onclick={(e) => (e.stopPropagation(), (noteOpen[step.id] = !noteOpen[step.id]))}
+                    >◆ agent note <span class="tw">▾</span></button>
+                  <div class="note-body"><p>{step.note}</p></div>
                 </div>
               {/if}
-            {/if}
 
-            {#if step.confirms?.length}
-              {#each step.confirms as c}
-                <button type="button" class="confirm" role="checkbox" aria-checked={Boolean(value(step.id, c.id))} onclick={() => toggleConfirm(step.id, c.id)}>
-                  <span class="toggle"></span>
-                  <span class="confirm-label">{c.label}{c.required ? " *" : ""}</span>
-                </button>
-              {/each}
-            {/if}
+              {#if step.body}<p class="body">{step.body}</p>{/if}
 
-            {#if step.inputs?.length}
-              {#each step.inputs as input}
-                <div class="field">
-                  <label for={`f-${step.id}-${input.id}`}>{input.label}{input.required ? " *" : ""}</label>
-                  {#if input.kind === "textarea"}
-                    <textarea id={`f-${step.id}-${input.id}`} value={stringValue(step.id, input.id)} oninput={(e) => setValue(step.id, input.id, e.currentTarget.value)}></textarea>
-                  {:else if input.kind === "checkbox"}
-                    <input id={`f-${step.id}-${input.id}`} type="checkbox" checked={Boolean(value(step.id, input.id))} onchange={(e) => setValue(step.id, input.id, e.currentTarget.checked)} />
-                  {:else if input.kind === "select"}
-                    <select id={`f-${step.id}-${input.id}`} value={stringValue(step.id, input.id)} onchange={(e) => setValue(step.id, input.id, e.currentTarget.value)}>
-                      <option value=""></option>
-                      {#each input.options as option}<option value={option}>{option}</option>{/each}
-                    </select>
-                  {:else if input.kind === "multiselect"}
-                    <div class="pills">
-                      {#each input.options as option}
-                        {@const sel = (value(step.id, input.id) ?? []) as string[]}
-                        <button
-                          type="button"
-                          class="pill"
-                          aria-pressed={sel.includes(option)}
-                          onclick={() => setValue(step.id, input.id, sel.includes(option) ? sel.filter((o) => o !== option) : [...sel, option])}>{option}</button>
-                      {/each}
-                    </div>
-                  {:else}
-                    <input id={`f-${step.id}-${input.id}`} type="text" value={stringValue(step.id, input.id)} oninput={(e) => setValue(step.id, input.id, e.currentTarget.value)} />
-                  {/if}
+              {#if step.links?.length}
+                <div class="links">{#each step.links as link}<a href={link.href} target="_blank" rel="noreferrer">{link.label}</a>{/each}</div>
+              {/if}
+
+              {#if step.commands?.length}
+                {#each step.commands as command}
+                  <div class="fence"><button class="copy" onclick={(e) => copy(command, e)}>copy</button><pre>{command}</pre></div>
+                {/each}
+              {/if}
+
+              {#if step.checks?.length}
+                <div class="checks">
+                  {#each step.checks as check}
+                    {@const result = checks[step.id]?.find((c) => c.id === check.id)}
+                    {@const cs = result?.status ?? "pending"}
+                    {#if cs === "unavailable"}
+                      {@const manual = Boolean(value(step.id, check.id))}
+                      <button
+                        type="button"
+                        disabled={finished || locked}
+                        class={"check manual" + (manual ? " pass" : "")}
+                        onclick={() => toggleConfirm(step.id, check.id)}
+                      >
+                        <span class="glyph">{manual ? "✓" : "?"}</span>
+                        <span class="label">{check.label}</span>
+                        <span class="dots"></span>
+                        <span class="auto">verify</span>
+                        <span class="verdict">{manual ? "verified" : "—"}</span>
+                      </button>
+                    {:else}
+                      <div class={"check " + cs}>
+                        <span class="glyph">{cs === "pass" ? "✓" : cs === "fail" ? "✗" : "◌"}</span>
+                        <span class="label">{check.label}</span>
+                        <span class="dots"></span>
+                        <span class="auto">auto</span>
+                        <span class="verdict">{cs}</span>
+                      </div>
+                    {/if}
+                  {/each}
                 </div>
-              {/each}
-            {/if}
+              {/if}
+
+              {#if step.paths?.length}
+                <div class="paths" role="tablist">
+                  {#each step.paths as p}
+                    <button
+                      type="button"
+                      role="tab"
+                      class="path-opt"
+                      class:fallback={Boolean(p.outcome)}
+                      aria-selected={activePathId === p.id}
+                      onclick={(e) => (e.stopPropagation(), selectPath(step.id, p.id))}>{p.label}</button>
+                  {/each}
+                </div>
+                {#if ap}
+                  <div class="path-pane" class:fallback={Boolean(ap.outcome)}>
+                    {#if ap.body}<p class="body">{ap.body}</p>{/if}
+                    {#if ap.links?.length}
+                      <div class="links">{#each ap.links as link}<a href={link.href} target="_blank" rel="noreferrer">{link.label}</a>{/each}</div>
+                    {/if}
+                    {#if ap.commands?.length}
+                      {#each ap.commands as command}
+                        <div class="fence"><button class="copy" onclick={(e) => copy(command, e)}>copy</button><pre>{command}</pre></div>
+                      {/each}
+                    {/if}
+                    {#if ap.confirms?.length}
+                      {#each ap.confirms as c}
+                        <button type="button" class="confirm" role="checkbox" aria-checked={Boolean(value(step.id, c.id))} onclick={() => toggleConfirm(step.id, c.id)}>
+                          <span class="toggle"></span>
+                          <span class="confirm-label">{c.label}{c.required ? " *" : ""}</span>
+                        </button>
+                      {/each}
+                    {/if}
+                  </div>
+                {/if}
+              {/if}
+
+              {#if step.confirms?.length}
+                {#each step.confirms as c}
+                  <button type="button" class="confirm" role="checkbox" aria-checked={Boolean(value(step.id, c.id))} onclick={() => toggleConfirm(step.id, c.id)}>
+                    <span class="toggle"></span>
+                    <span class="confirm-label">{c.label}{c.required ? " *" : ""}</span>
+                  </button>
+                {/each}
+              {/if}
+
+              {#if step.inputs?.length}
+                {#each step.inputs as input}
+                  <div class="field">
+                    <label for={`f-${step.id}-${input.id}`}>{input.label}{input.required ? " *" : ""}</label>
+                    {#if input.kind === "textarea"}
+                      <textarea id={`f-${step.id}-${input.id}`} value={stringValue(step.id, input.id)} oninput={(e) => setValue(step.id, input.id, e.currentTarget.value)}></textarea>
+                    {:else if input.kind === "checkbox"}
+                      <input id={`f-${step.id}-${input.id}`} type="checkbox" checked={Boolean(value(step.id, input.id))} onchange={(e) => setValue(step.id, input.id, e.currentTarget.checked)} />
+                    {:else if input.kind === "select"}
+                      <select id={`f-${step.id}-${input.id}`} value={stringValue(step.id, input.id)} onchange={(e) => setValue(step.id, input.id, e.currentTarget.value)}>
+                        <option value=""></option>
+                        {#each input.options as option}<option value={option}>{option}</option>{/each}
+                      </select>
+                    {:else if input.kind === "multiselect"}
+                      <div class="pills">
+                        {#each input.options as option}
+                          {@const sel = (value(step.id, input.id) ?? []) as string[]}
+                          <button
+                            type="button"
+                            class="pill"
+                            aria-pressed={sel.includes(option)}
+                            onclick={() => setValue(step.id, input.id, sel.includes(option) ? sel.filter((o) => o !== option) : [...sel, option])}>{option}</button>
+                        {/each}
+                      </div>
+                    {:else}
+                      <input id={`f-${step.id}-${input.id}`} type="text" value={stringValue(step.id, input.id)} oninput={(e) => setValue(step.id, input.id, e.currentTarget.value)} />
+                    {/if}
+                  </div>
+                {/each}
+              {/if}
+            </div>
 
             {#if step.askable !== false}
               <div class="ask">
