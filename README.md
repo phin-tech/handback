@@ -105,16 +105,29 @@ handback doctor [task.json]   Print setup hints, or validate a task file if one 
 Sessions persist as JSON under `~/.handback/sessions/` (override the base dir with
 `HANDBACK_HOME`). Set `HANDBACK_OPEN=0` to skip auto-opening the browser.
 
-## Authoring skill
+## Agent skills
 
-This repo ships an installable [Agent Skill](https://skills.sh) that teaches an agent to write
-good handback runbooks:
+This repo ships installable [Agent Skills](https://skills.sh):
 
 ```bash
 npx skills add phin-tech/handback
 ```
 
+- **`handback-runbooks`** — teaches an agent to author good runbooks when it hits a human gate
+  mid-task (the agent-initiated handback loop).
+- **`/punch-list`** — human-initiated entry point: when you ask *"what's on my plate"* / *"tell me
+  what to do,"* it gathers your outstanding human-only actions, renders them as a punch list, waits,
+  and resumes from what you did.
+
 Installed CLI users can also run `handback doctor` to print this command.
+
+To make an agent reach for the punch list automatically — instead of dumping a markdown checklist —
+add a standing rule to your repo's `CLAUDE.md` (or equivalent):
+
+```md
+When I ask what to do / for a checklist / what's on my plate, render it with `handback run`
+(the /punch-list skill), not a markdown list.
+```
 
 ## Development
 
