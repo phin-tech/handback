@@ -32,6 +32,17 @@ test("package declares a postinstall doctor hint", async () => {
   assert.ok(pkg.files?.includes("scripts/postinstall.mjs"));
 });
 
+test("package release script creates a GitHub release and does not publish locally", async () => {
+  const pkg = JSON.parse(await readFile("package.json", "utf8")) as { scripts?: Record<string, string> };
+  const release = pkg.scripts?.release ?? "";
+
+  assert.match(release, /npm test/);
+  assert.match(release, /npm run build/);
+  assert.match(release, /git diff --exit-code/);
+  assert.match(release, /gh release create/);
+  assert.doesNotMatch(release, /npm publish/);
+});
+
 test("postinstall prints handback doctor hint", async () => {
   const child = spawn(process.execPath, ["scripts/postinstall.mjs"], {
     cwd: process.cwd(),

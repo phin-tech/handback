@@ -36,6 +36,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -p tsconfig.json && vite build",
     "postinstall": "node scripts/postinstall.mjs",
+    "release": "npm test && npm run build && git diff --exit-code && gh release create \"v$(node -p \\\"require('./package.json').version\\\")\" --generate-notes",
     "test": "node --import tsx --test test/*.test.ts",
     "test:uat": "npm run build && node scripts/uat.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",
