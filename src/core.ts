@@ -128,6 +128,7 @@ export type Session = {
   reason?: string;
   createdAt: string;
   finishedAt?: string;
+  agentWaitingUntil?: string;
   pid?: number;
   port?: number;
   url?: string;
@@ -499,6 +500,13 @@ export function updateStep(
       ...session.steps,
       [input.stepId]: { ...state, updatedAt: input.now }
     }
+  };
+}
+
+export function markAgentWaiting(session: Session, input: { now: string; ttlMs?: number }): Session {
+  return {
+    ...session,
+    agentWaitingUntil: new Date(new Date(input.now).getTime() + (input.ttlMs ?? 3000)).toISOString()
   };
 }
 

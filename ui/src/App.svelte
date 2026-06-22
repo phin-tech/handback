@@ -66,6 +66,9 @@
   function isAlt(step: Step, state: StepState): boolean {
     return state.status === "done" && Boolean(activePath(step, state)?.outcome);
   }
+  function agentWaiting(): boolean {
+    return Boolean(session?.agentWaitingUntil && Date.parse(session.agentWaitingUntil) > Date.now());
+  }
 
   // ---- collapse defaults & transitions -------------------------------------
   function initCollapse(): void {
@@ -467,7 +470,7 @@
               {/if}
             </div>
 
-            {#if step.askable !== false}
+            {#if state.questions?.length || (step.askable !== false && agentWaiting())}
               <div class="ask">
                 {#if state.questions?.length}
                   <div class="thread">
@@ -481,17 +484,19 @@
                     {/each}
                   </div>
                 {/if}
-                <div class="ask-row">
-                  <input
-                    type="text"
-                    placeholder="Ask the agent"
-                    value={questionDraft[step.id] ?? ""}
-                    disabled={finished}
-                    oninput={(e) => (questionDraft[step.id] = e.currentTarget.value)}
-                    onkeydown={(e) => e.key === "Enter" && (e.preventDefault(), askAgent(step.id))}
-                  />
-                  <button type="button" disabled={finished || !(questionDraft[step.id] ?? "").trim()} onclick={() => askAgent(step.id)}>Ask</button>
-                </div>
+                {#if step.askable !== false && agentWaiting()}
+                  <div class="ask-row">
+                    <input
+                      type="text"
+                      placeholder="Ask the agent"
+                      value={questionDraft[step.id] ?? ""}
+                      disabled={finished}
+                      oninput={(e) => (questionDraft[step.id] = e.currentTarget.value)}
+                      onkeydown={(e) => e.key === "Enter" && (e.preventDefault(), askAgent(step.id))}
+                    />
+                    <button type="button" disabled={finished || !(questionDraft[step.id] ?? "").trim()} onclick={() => askAgent(step.id)}>Ask</button>
+                  </div>
+                {/if}
               </div>
             {/if}
           </div>

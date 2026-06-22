@@ -12,6 +12,7 @@ import {
   applyInputUpdate,
   buildResult,
   finishSession,
+  markAgentWaiting,
   type Session,
   StepSchema,
   StepStatusSchema,
@@ -45,6 +46,11 @@ export async function serveSession(input: { id: string; sessionDir?: string; ope
         if (req.method === "GET" && url.pathname === "/api/result") {
           if (session.status !== "finished") return empty(res, 204);
           return json(res, 200, buildResult(session));
+        }
+        if (req.method === "POST" && url.pathname === "/api/agent/waiting") {
+          session = markAgentWaiting(session, { now: new Date().toISOString() });
+          await store.save(session);
+          return json(res, 200, publicSession(session));
         }
         if (req.method === "POST" && url.pathname.startsWith("/api/steps/") && url.pathname.endsWith("/questions")) {
           const stepId = decodeURIComponent(url.pathname.slice("/api/steps/".length, -"/questions".length));

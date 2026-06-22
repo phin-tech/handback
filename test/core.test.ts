@@ -9,6 +9,7 @@ import {
   buildResult,
   canFinish,
   createSession,
+  markAgentWaiting,
   nextQuestionEvent,
   parseRawTask,
   parseTask,
@@ -89,6 +90,13 @@ test("questions wake wait, can be answered, and are included in the result", () 
   assert.deepEqual(buildResult(session).steps[0].questions, [
     { id: "q1", text: "Which PR?", askedAt: "t1", answer: "PR #3", answeredAt: "t2", updatedAt: "t3" }
   ]);
+});
+
+test("markAgentWaiting records a short expiry window", () => {
+  const session = createSession({ id: "hb_wait", token: "t", now: "2026-06-22T14:00:00.000Z", task });
+  const next = markAgentWaiting(session, { now: "2026-06-22T14:00:01.000Z", ttlMs: 2500 });
+
+  assert.equal(next.agentWaitingUntil, "2026-06-22T14:00:03.500Z");
 });
 
 test("agent step updates merge through task validation and preserve state", () => {

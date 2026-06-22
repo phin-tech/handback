@@ -124,6 +124,11 @@ test("browser asks the agent and refreshes the answer inline", async () => {
     await page.goto(`${url}?token=secret`);
     await page.getByRole("heading", { name: "Questions" }).first().waitFor();
 
+    assert.equal(await page.getByPlaceholder("Ask the agent").count(), 0);
+    const waiting = await fetch(`http://127.0.0.1:${backend.port}/api/agent/waiting?token=secret`, { method: "POST" });
+    assert.equal(waiting.status, 200);
+    await page.getByPlaceholder("Ask the agent").waitFor();
+
     await page.getByPlaceholder("Ask the agent").fill("Which option?");
     await page.getByRole("button", { name: "Ask" }).click();
     await page.getByText("Which option?").waitFor();

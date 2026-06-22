@@ -8,6 +8,7 @@ import {
   answerQuestion,
   createSession,
   buildResult,
+  markAgentWaiting,
   nextQuestionEvent,
   parseRawTask,
   resolveIncludes,
@@ -61,6 +62,7 @@ async function wait(id: string | undefined): Promise<void> {
   if (!id) throw new Error("Usage: handback wait <session-id>");
   for (;;) {
     const session = await store.load(id);
+    await markWaiting(session).catch(() => undefined);
     const question = nextQuestionEvent(session);
     if (question) {
       console.log(JSON.stringify(question, null, 2));
@@ -72,6 +74,19 @@ async function wait(id: string | undefined): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
+}
+
+async function markWaiting(session: { id: string; port?: number; token: string }): Promise<void> {
+  if (session.port) {
+    try {
+      await postLive({ port: session.port, token: session.token }, "/api/agent/waiting", {});
+      return;
+    } catch {
+      // Server may have gone away; keep wait usable for file-only sessions.
+    }
+  }
+  const current = await store.load(session.id);
+  await store.save(markAgentWaiting(current, { now: new Date().toISOString() }));
 }
 
 async function answer(id: string | undefined, questionId: string | undefined, text: string): Promise<void> {

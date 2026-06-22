@@ -152,6 +152,28 @@ test("operator questions and agent answers persist through the server", async ()
   }
 });
 
+test("agent waiting heartbeat is visible in session status", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-waiting-server-test-"));
+  try {
+    const store = createSessionStore(dir);
+    await store.save(
+      createSession({ id: "hb_waiting", token: "secret", now: "now", task: parseTask({ title: "T", steps: [{ id: "s", title: "Step" }] }) })
+    );
+
+    const server = await serveSession({ id: "hb_waiting", sessionDir: dir, open: false });
+    try {
+      const res = await fetch(`http://127.0.0.1:${server.port}/api/agent/waiting?token=secret`, { method: "POST" });
+      assert.equal(res.status, 200);
+      assert.ok(Date.parse((await store.load("hb_waiting")).agentWaitingUntil ?? "") > Date.now());
+    } finally {
+      server.close();
+      await server.closed;
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("agent can update a live step through the server", async () => {
   const dir = await mkdtemp(join(tmpdir(), "handback-step-update-server-test-"));
   try {
