@@ -399,9 +399,9 @@ async function loadTask(filePath: string, vars: Record<string, string>): Promise
 }
 
 async function startSession(nameOrPath: string, vars: Record<string, string>): Promise<{ id: string; url?: string; token: string }> {
-  const task = await loadTask(await resolvePlanPath(nameOrPath), vars);
   const id = `hb_${randomBytes(5).toString("base64url")}`;
   const token = randomBytes(18).toString("base64url");
+  const task = await loadTask(await resolvePlanPath(nameOrPath), { ...vars, session: id, sessionId: id });
   await store.save(createSession({ id, token, task, now: new Date().toISOString() }));
 
   const child = spawn(process.execPath, [...process.execArgv, serverRunnerPath(), id], {

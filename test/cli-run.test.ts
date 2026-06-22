@@ -401,6 +401,50 @@ test("run resolves plan by name from HANDBACK_PLANS and substitutes --var", asyn
   }
 });
 
+test("start renders the generated session id into command templates", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-session-vars-test-"));
+  const taskPath = join(dir, "task.json");
+  await writeFile(
+    taskPath,
+    JSON.stringify({
+      title: "T",
+      steps: [
+        {
+          id: "deploy",
+          title: "Deploy",
+          commands: [
+            "printf ok | handback tee {{session}} deploy output",
+            "echo {{sessionId}}"
+          ],
+          inputs: [{ id: "output", label: "Output", kind: "textarea" }]
+        }
+      ]
+    })
+  );
+
+  const child = spawn(process.execPath, ["--import", "tsx", "src/cli.ts", "start", taskPath], {
+    cwd: process.cwd(),
+    env: { ...process.env, HANDBACK_HOME: dir, HANDBACK_OPEN: "0" },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  try {
+    let stdout = "";
+    child.stdout.on("data", (chunk) => (stdout += String(chunk)));
+    const started = await waitFor(() => JSON.parse(stdout) as { sessionId: string; url: string });
+
+    const statusRes = await fetch(started.url.replace("/?", "/api/status?"));
+    const body = await statusRes.json() as { session: { task: { steps: Array<{ commands?: string[] }> } } };
+    assert.deepEqual(body.session.task.steps[0].commands, [
+      `printf ok | handback tee ${started.sessionId} deploy output`,
+      `echo ${started.sessionId}`
+    ]);
+  } finally {
+    if (child.exitCode === null) child.kill();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 async function waitFor<T>(fn: () => T): Promise<T> {
   const deadline = Date.now() + 5000;
   let lastError: unknown;
