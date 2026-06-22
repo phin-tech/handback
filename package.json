@@ -1,6 +1,6 @@
 {
   "name": "handback",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "description": "Hand control from an agent to a human via a local web runbook.",
   "type": "module",
   "license": "MIT",
@@ -10,7 +10,8 @@
   "files": [
     "dist/src",
     "dist/ui",
-    "examples"
+    "examples",
+    "scripts/postinstall.mjs"
   ],
   "engines": {
     "node": ">=18"
@@ -34,6 +35,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -p tsconfig.json && vite build",
+    "postinstall": "node scripts/postinstall.mjs",
     "test": "node --import tsx --test test/*.test.ts",
     "test:uat": "npm run build && node scripts/uat.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",

@@ -95,6 +95,7 @@ handback wait <session-id>    Block until a started session finishes, print its 
 handback status <session-id>  Print a session (token redacted)
 handback open <session-id>    Open a session's URL in the browser
 handback list                 List sessions
+handback doctor               Print optional setup checks and install hints
 ```
 
 Sessions persist as JSON under `~/.handback/sessions/` (override the base dir with
@@ -108,6 +109,8 @@ good handback runbooks:
 ```bash
 npx skills add phin-tech/handback
 ```
+
+Installed CLI users can also run `handback doctor` to print this command.
 
 ## Development
 

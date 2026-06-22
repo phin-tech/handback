@@ -6,6 +6,67 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import test from "node:test";
 
+test("doctor prints the agent skill install command", async () => {
+  const child = spawn(process.execPath, ["--import", "tsx", "src/cli.ts", "doctor"], {
+    cwd: process.cwd(),
+    env: { ...process.env },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => (stdout += String(chunk)));
+  child.stderr.on("data", (chunk) => (stderr += String(chunk)));
+
+  const [code] = (await once(child, "exit")) as [number];
+
+  assert.equal(code, 0);
+  assert.equal(stderr, "");
+  assert.match(stdout, /npx skills add phin-tech\/handback/);
+});
+
+test("package declares a postinstall doctor hint", async () => {
+  const pkg = JSON.parse(await readFile("package.json", "utf8")) as { files?: string[]; scripts?: Record<string, string> };
+
+  assert.equal(pkg.scripts?.postinstall, "node scripts/postinstall.mjs");
+  assert.ok(pkg.files?.includes("scripts/postinstall.mjs"));
+});
+
+test("postinstall prints handback doctor hint", async () => {
+  const child = spawn(process.execPath, ["scripts/postinstall.mjs"], {
+    cwd: process.cwd(),
+    env: { ...process.env },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => (stdout += String(chunk)));
+  child.stderr.on("data", (chunk) => (stderr += String(chunk)));
+
+  const [code] = (await once(child, "exit")) as [number];
+
+  assert.equal(code, 0);
+  assert.equal(stderr, "");
+  assert.match(stdout, /handback doctor/);
+});
+
+test("help lists doctor", async () => {
+  const child = spawn(process.execPath, ["--import", "tsx", "src/cli.ts"], {
+    cwd: process.cwd(),
+    env: { ...process.env },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  let stderr = "";
+  child.stderr.on("data", (chunk) => (stderr += String(chunk)));
+
+  const [code] = (await once(child, "exit")) as [number];
+
+  assert.equal(code, 0);
+  assert.match(stderr, /handback doctor/);
+});
+
 test("run blocks until finish and then prints result JSON", async () => {
   const dir = await mkdtemp(join(tmpdir(), "handback-run-test-"));
   const taskPath = join(dir, "task.json");

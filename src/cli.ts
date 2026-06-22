@@ -20,6 +20,7 @@ try {
   else if (command === "open") await open(args[1]);
   else if (command === "list") await list();
   else if (command === "tee") await tee(args[1], args[2], args[3]);
+  else if (command === "doctor") doctor();
   else if (command === "--version" || command === "-v") version();
   else help(command ? 1 : 0);
 } catch (error) {
@@ -71,6 +72,11 @@ async function list(): Promise<void> {
   for (const session of sessions) {
     console.log(`${session.id}\t${session.status}\t${session.task.title}\t${session.url ?? ""}`);
   }
+}
+
+function doctor(): void {
+  console.log(`Agent skill:
+  npx skills add phin-tech/handback`);
 }
 
 async function waitForUrl(id: string) {
@@ -127,6 +133,7 @@ function help(code: number): never {
   handback open <session-id>
   handback list
   handback tee <session-id> <step-id> <input-id> [--file <path>]
+  handback doctor
 
   Names resolve from $HANDBACK_PLANS/<name>.json or .handback/<name>.json in the git root.
   Template vars in task files use {{name}} syntax.`);

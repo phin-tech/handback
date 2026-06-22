@@ -115,6 +115,8 @@ This repo ships an installable [Agent Skill](https://skills.sh) that teaches an 
 npx skills add phin-tech/handback
 ```
 
+Installed CLI users can also run `handback doctor` to print this command.
+
 ## Sessions
 
 Sessions persist as JSON under `~/.handback/sessions/` (override with `HANDBACK_HOME`). Set `HANDBACK_OPEN=0` to skip auto-opening the browser.
