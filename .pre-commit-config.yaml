@@ -1,0 +1,15 @@
+# Managed with prek (https://prek.j178.dev) — a drop-in, dependency-free pre-commit runner.
+# Install the git hook with:  prek install
+repos:
+  - repo: local
+    hooks:
+      # The task JSON Schema is generated from the Zod source and committed in two places
+      # (schema/ and the skill's references/). Regenerate on any change to the source or the
+      # generator; if the committed copies drift, prek rewrites them and fails the commit so
+      # you re-stage the regenerated files.
+      - id: gen-schema
+        name: Regenerate task JSON Schema
+        language: system
+        entry: npm run --silent gen:schema
+        pass_filenames: false
+        files: ^(src/(core|schema)\.ts|scripts/gen-schema\.mjs)$

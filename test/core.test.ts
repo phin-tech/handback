@@ -9,7 +9,8 @@ import {
   createSession,
   parseRawTask,
   parseTask,
-  resolveIncludes
+  resolveIncludes,
+  validateRawTask
 } from "../src/core.js";
 
 const task = parseTask({
@@ -261,6 +262,41 @@ test("resolveIncludes flattens sub-plan steps with namespace prefix", async () =
     ["prep", "smoke.verify", "deploy"]
   );
   assert.deepEqual(task.steps[2].requires, ["smoke.verify"]);
+});
+
+test("validateRawTask accepts a valid task and reports no unknown keys", () => {
+  const report = validateRawTask({
+    $schema: "https://example.com/task.schema.json",
+    title: "T",
+    steps: [{ id: "s", title: "S" }]
+  });
+  assert.equal(report.ok, true);
+  if (report.ok) assert.deepEqual(report.unknownKeys, []);
+});
+
+test("validateRawTask flags unknown fields that runtime parsing would silently strip", () => {
+  const report = validateRawTask({ title: "T", steps: [{ id: "s", title: "S", titel: "typo" }] });
+  assert.equal(report.ok, true);
+  if (report.ok) assert.deepEqual(report.unknownKeys, ["steps[0].titel"]);
+});
+
+test("validateRawTask reports missing required fields with a field path", () => {
+  const report = validateRawTask({ steps: [] });
+  assert.equal(report.ok, false);
+  if (!report.ok) {
+    const paths = report.issues.map((issue) => issue.path);
+    assert.ok(paths.includes("title"));
+    assert.ok(paths.includes("steps"));
+  }
+});
+
+test("validateRawTask gives a branch-specific reason for a malformed step", () => {
+  const report = validateRawTask({ title: "T", steps: [{ id: "a", requires: ["x"] }] });
+  assert.equal(report.ok, false);
+  if (!report.ok) {
+    assert.ok(report.issues.some((issue) => issue.path === "steps[0].title"));
+    assert.ok(report.issues.every((issue) => issue.message !== "Invalid input"));
+  }
 });
 
 test("resolveIncludes rewrites internal requires but leaves cross-plan requires alone", async () => {

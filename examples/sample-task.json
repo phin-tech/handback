@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/phin-tech/handback/main/schema/task.schema.json",
   "title": "Release handback",
   "steps": [
     {

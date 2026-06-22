@@ -17,6 +17,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Fails if the committed JSON Schema has drifted from the Zod source: the gen-schema hook
+      # regenerates it and prek flags any modified files. Runs after npm ci so the `system` hook
+      # has node_modules (tsx, zod) available.
+      - uses: j178/prek-action@v2
       - run: npm run check
       - run: npx playwright install --with-deps chromium
       - run: npm test

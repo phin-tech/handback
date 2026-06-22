@@ -1,6 +1,6 @@
 {
   "name": "handback",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Hand control from an agent to a human via a local web runbook.",
   "type": "module",
   "license": "MIT",
@@ -11,6 +11,7 @@
     "dist/src",
     "dist/ui",
     "examples",
+    "schema/task.schema.json",
     "scripts/postinstall.mjs"
   ],
   "engines": {
@@ -34,7 +35,8 @@
   ],
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -p tsconfig.json && npm run gen:schema && vite build",
+    "gen:schema": "node --import tsx scripts/gen-schema.mjs",
     "postinstall": "node scripts/postinstall.mjs",
     "release": "npm test && npm run build && git diff --exit-code && gh release create \"v$(node -p \\\"require('./package.json').version\\\")\" --generate-notes",
     "test": "node --import tsx --test test/*.test.ts",

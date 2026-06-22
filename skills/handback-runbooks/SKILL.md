@@ -18,19 +18,26 @@ sign-off. Don't use it for work the agent can do itself.
 
 ## Workflow
 
-1. Write a task JSON file (see shape below; full reference in
-   [`docs/reference/task-format.md`](../../docs/reference/task-format.md)).
-2. **Run it** — pick a mode (see [Two modes](#two-modes-block-or-poll-in-the-background)
+1. Write a task JSON file (see shape below). The full machine-readable field spec — every field,
+   its type, and a one-line description — is bundled with this skill at
+   [`references/task.schema.json`](references/task.schema.json); read it directly when you need
+   the exact shape (or run `handback schema` to print the same thing). Set the file's `$schema`
+   to that path (or the published URL) so an editor validates as you write.
+2. **Validate it** — `handback validate task.json` before running. It reports unknown/mistyped
+   fields, missing or malformed fields (with each field's purpose), duplicate step ids, and bad
+   `requires`, and exits non-zero on failure. Fix anything it flags, then re-run it — only hand a
+   clean runbook to the human.
+3. **Run it** — pick a mode (see [Two modes](#two-modes-block-or-poll-in-the-background)
    below): `handback run task.json` to block inline, or `handback start task.json` plus a
    background poller so you can keep working while the human does the runbook.
-3. **Optionally pre-populate inputs** using `handback tee` — pipe a script's output directly
+4. **Optionally pre-populate inputs** using `handback tee` — pipe a script's output directly
    into a step's input field so the operator sees it pre-filled rather than having to copy-paste:
    ```bash
    SESSION=$(handback start release.json | jq -r .sessionId)
    ./deploy.sh | handback tee $SESSION deploy output
    handback wait $SESSION
    ```
-4. Read the result: each step reports `status` (`done` / `skipped` / `blocked` / `pending`),
+5. Read the result: each step reports `status` (`done` / `skipped` / `blocked` / `pending`),
    an `outcome` (the path's label when a fallback path was taken, else the status), any
    `inputs`/confirm values the human entered, and `selectedPath`. Resume accordingly.
 
@@ -133,4 +140,7 @@ current session state and exits.
 
 A complete, realistic example using every feature lives at
 [`examples/cross-service-release.json`](../../examples/cross-service-release.json).
-Full field-by-field reference: [`docs/reference/task-format.md`](../../docs/reference/task-format.md).
+The machine-readable field spec is bundled here at
+[`references/task.schema.json`](references/task.schema.json) (also via `handback schema`); a
+prose reference lives at [`docs/reference/task-format.md`](../../docs/reference/task-format.md).
+Always `handback validate <task.json>` to self-check before handing the runbook to a human.

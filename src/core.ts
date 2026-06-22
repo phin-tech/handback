@@ -1,85 +1,94 @@
 import { z } from "zod";
 
 const inputBase = z.object({
-  id: z.string().min(1),
-  label: z.string().min(1),
-  required: z.boolean().optional()
+  id: z.string().min(1).describe("Unique within the step; the value the human enters is keyed by this id in the result."),
+  label: z.string().min(1).describe("Field label shown to the operator."),
+  required: z.boolean().optional().describe("When true, the step can't be completed until this field has a value.")
 });
 
 export const InputSchema = z.discriminatedUnion("kind", [
-  inputBase.extend({ kind: z.literal("text") }),
-  inputBase.extend({ kind: z.literal("textarea") }),
-  inputBase.extend({ kind: z.literal("checkbox") }),
-  inputBase.extend({ kind: z.literal("select"), options: z.array(z.string()).min(1) }),
-  inputBase.extend({ kind: z.literal("multiselect"), options: z.array(z.string()).min(1) })
-]);
+  inputBase.extend({ kind: z.literal("text").describe("Single-line text input → string value.") }),
+  inputBase.extend({ kind: z.literal("textarea").describe("Multi-line text input → string value.") }),
+  inputBase.extend({ kind: z.literal("checkbox").describe("Single checkbox → boolean value.") }),
+  inputBase.extend({
+    kind: z.literal("select").describe("Pick one of `options` → string value."),
+    options: z.array(z.string()).min(1).describe("The choices to pick from.")
+  }),
+  inputBase.extend({
+    kind: z.literal("multiselect").describe("Pick any of `options` → string[] value."),
+    options: z.array(z.string()).min(1).describe("The choices to pick from.")
+  })
+]).describe("Data collected from the human. Discriminated on `kind`.");
 
 const checkBase = z.object({
-  id: z.string().min(1),
-  label: z.string().min(1),
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-  number: z.number().int().positive()
+  id: z.string().min(1).describe("Unique within the step; keys the check result."),
+  label: z.string().min(1).describe("Plain-language statement of what passing means, e.g. \"phin-tech/orders-svc#88 is merged\"."),
+  owner: z.string().min(1).describe("GitHub repo owner (org or user)."),
+  repo: z.string().min(1).describe("GitHub repo name."),
+  number: z.number().int().positive().describe("Pull request number.")
 });
 
 export const CheckSchema = z.discriminatedUnion("kind", [
   checkBase.extend({
-    kind: z.literal("github_pr_review_decision"),
-    expect: z.enum(["APPROVED", "REVIEW_REQUIRED", "CHANGES_REQUESTED"]).default("APPROVED")
+    kind: z.literal("github_pr_review_decision").describe("Passes when the PR's review decision equals `expect`."),
+    expect: z.enum(["APPROVED", "REVIEW_REQUIRED", "CHANGES_REQUESTED"]).default("APPROVED").describe("Required review decision. Defaults to APPROVED.")
   }),
-  checkBase.extend({ kind: z.literal("github_pr_merged") })
-]);
+  checkBase.extend({ kind: z.literal("github_pr_merged").describe("Passes when the PR state is MERGED.") })
+]).describe("System-owned check auto-evaluated via the `gh` CLI. Not for the human to tick. Discriminated on `kind`.");
 
 // Operator confirmation — a manual checkbox the human ticks. Distinct from data-collection
 // inputs; its value persists in StepState.inputs keyed by id.
 export const ConfirmSchema = z.object({
-  id: z.string().min(1),
-  label: z.string().min(1),
-  required: z.boolean().optional()
-});
+  id: z.string().min(1).describe("Unique within the step; keys the confirm's boolean in the result."),
+  label: z.string().min(1).describe("What the operator is vouching for, e.g. \"/healthz returns 200\"."),
+  required: z.boolean().optional().describe("When true, the step can't be completed until this is ticked.")
+}).describe("A manual checkbox the operator ticks. Use for things only a human can verify; use `checks` for anything a machine can.");
 
 // Where a step happens. `repo` renders as a GitHub-style tag; `tool` for non-GitHub systems
 // (LaunchDarkly, Slack, Linear, …).
 export const SourceSchema = z.object({
-  kind: z.enum(["repo", "tool"]),
-  label: z.string().min(1),
-  href: z.string().url().optional()
-});
+  kind: z.enum(["repo", "tool"]).describe("`repo` → blue GitHub-style tag; `tool` → purple tag for non-GitHub systems."),
+  label: z.string().min(1).describe("Tag text, e.g. \"phin-tech/orders-svc\" or \"LaunchDarkly · production\"."),
+  href: z.string().url().optional().describe("Optional URL — makes the tag a link.")
+}).describe("Where the step happens, rendered as a tag.");
 
-const LinkSchema = z.object({ label: z.string().min(1), href: z.string().url() });
+const LinkSchema = z.object({
+  label: z.string().min(1).describe("Link text."),
+  href: z.string().url().describe("Link URL.")
+}).describe("A reference link.");
 
 // An alternative way to satisfy a step (e.g. a fallback / rollback). When a step is completed
 // on a path whose `outcome` is set, the result records that label instead of plain "done".
 export const PathSchema = z.object({
-  id: z.string().min(1),
-  label: z.string().min(1),
-  outcome: z.string().min(1).optional(),
-  body: z.string().optional(),
-  commands: z.array(z.string().min(1)).optional(),
-  links: z.array(LinkSchema).optional(),
-  confirms: z.array(ConfirmSchema).optional()
-});
+  id: z.string().min(1).describe("Unique within the step."),
+  label: z.string().min(1).describe("Shown on the segmented path switch."),
+  outcome: z.string().min(1).optional().describe("Recorded in the result when the step is completed on this path (e.g. \"rolled back\"). Omit for the happy path."),
+  body: z.string().optional().describe("Path-specific instructions."),
+  commands: z.array(z.string().min(1)).optional().describe("Path-specific shell snippets."),
+  links: z.array(LinkSchema).optional().describe("Path-specific reference links."),
+  confirms: z.array(ConfirmSchema).optional().describe("Path-specific confirms — only the selected path's required confirms gate completion.")
+}).describe("An alternative way to satisfy a step (e.g. a fallback / rollback).");
 
 export const StepSchema = z.object({
-  id: z.string().min(1),
-  title: z.string().min(1),
-  body: z.string().optional(),
-  note: z.string().optional(),
+  id: z.string().min(1).describe("Unique within the task; referenced by other steps' `requires`."),
+  title: z.string().min(1).describe("Step heading shown to the operator."),
+  body: z.string().optional().describe("Prose instructions (newlines preserved)."),
+  note: z.string().optional().describe("Collapsible \"from the AI\" callout for context/gotchas."),
   source: SourceSchema.optional(),
-  links: z.array(LinkSchema).optional(),
-  commands: z.array(z.string().min(1)).optional(),
-  requires: z.array(z.string().min(1)).optional(),
-  inputs: z.array(InputSchema).optional(),
-  confirms: z.array(ConfirmSchema).optional(),
-  checks: z.array(CheckSchema).optional(),
-  paths: z.array(PathSchema).min(2).optional(),
-  autoCompleteWhen: z.enum(["never", "checks_pass"]).default("never")
-});
+  links: z.array(LinkSchema).optional().describe("Reference links."),
+  commands: z.array(z.string().min(1)).optional().describe("Shell snippets, each rendered with a copy button."),
+  requires: z.array(z.string().min(1)).optional().describe("Step ids that must be done/skipped before this one unlocks."),
+  inputs: z.array(InputSchema).optional().describe("Data to collect from the human."),
+  confirms: z.array(ConfirmSchema).optional().describe("Operator tick-list (human-verified)."),
+  checks: z.array(CheckSchema).optional().describe("System-owned, auto-evaluated checks."),
+  paths: z.array(PathSchema).min(2).optional().describe("Two or more alternative ways to satisfy the step."),
+  autoCompleteWhen: z.enum(["never", "checks_pass"]).default("never").describe("Auto-mark the step done when all checks pass. Defaults to \"never\".")
+}).describe("One unit of work the human does.");
 
 export const TaskSchema = z.object({
-  title: z.string().min(1),
-  steps: z.array(StepSchema).min(1)
-});
+  title: z.string().min(1).describe("Shown in the runbook header."),
+  steps: z.array(StepSchema).min(1).describe("Ordered steps; at least one.")
+}).describe("A handback runbook.");
 
 export const StepStatusSchema = z.enum(["pending", "done", "skipped", "blocked"]);
 export const SessionOutcomeSchema = z.enum(["completed", "incomplete", "cancelled"]);
@@ -123,21 +132,101 @@ export type CheckResult = {
 };
 
 export const IncludeMarkerSchema = z.object({
-  include: z.string().min(1),
-  as: z.string().min(1).optional(),
-  vars: z.record(z.string(), z.string()).optional()
-});
+  include: z.string().min(1).describe("Name or path of another task file to inline as a sub-plan."),
+  as: z.string().min(1).optional().describe("Namespace prefix for the included steps' ids. Defaults to the file's base name."),
+  vars: z.record(z.string(), z.string()).optional().describe("Template variables passed to the included file.")
+}).describe("Inlines another task file's steps in place, namespaced.");
 
 export const RawTaskSchema = z.object({
-  title: z.string().min(1),
-  steps: z.array(z.union([StepSchema, IncludeMarkerSchema])).min(1)
-});
+  $schema: z.string().optional().describe("Optional JSON Schema URL for editor validation; ignored at runtime."),
+  title: z.string().min(1).describe("Shown in the runbook header."),
+  steps: z.array(z.union([StepSchema, IncludeMarkerSchema])).min(1).describe("Ordered steps and/or include markers; at least one.")
+}).describe("A handback runbook as authored on disk, before include markers are resolved.");
 
 export type RawTask = z.infer<typeof RawTaskSchema>;
 export type IncludeMarker = z.infer<typeof IncludeMarkerSchema>;
 
 export function parseRawTask(input: unknown): RawTask {
   return RawTaskSchema.parse(input);
+}
+
+export type ValidationIssue = { path: string; message: string };
+export type ValidationReport =
+  | { ok: false; issues: ValidationIssue[] }
+  | { ok: true; parsed: RawTask; unknownKeys: string[] };
+
+// Structural validation of a parsed task object against RawTaskSchema (include markers allowed).
+// On success also reports keys present in the input that the schema doesn't define — runtime
+// parsing silently strips these, so a typo'd field name (e.g. `titel`) would otherwise vanish.
+// Cross-step checks (duplicate ids, unknown `requires`, include resolution) run separately via
+// parseTask/resolveIncludes once includes are loaded.
+export function validateRawTask(input: unknown): ValidationReport {
+  const result = RawTaskSchema.safeParse(input);
+  if (!result.success) {
+    return { ok: false, issues: refineIssues(input, result.error.issues) };
+  }
+  return { ok: true, parsed: result.data, unknownKeys: collectUnknownKeys(input, result.data, []) };
+}
+
+// A step entry is a `z.union([StepSchema, IncludeMarkerSchema])`, so a malformed step collapses
+// to a single vague "Invalid input" at `steps[i]`. Re-validate each offending entry against the
+// branch it's clearly aiming at (an `include` key ⇒ include marker, else a step) so the agent
+// gets the real reason — which field is missing or mistyped.
+function refineIssues(input: unknown, issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; message: string }>): ValidationIssue[] {
+  const steps = isPlainObject(input) && Array.isArray(input.steps) ? input.steps : undefined;
+  const out: ValidationIssue[] = [];
+  const refined = new Set<number>();
+
+  for (const issue of issues) {
+    const [head, index] = issue.path;
+    if (steps && head === "steps" && typeof index === "number" && isPlainObject(steps[index])) {
+      if (!refined.has(index)) {
+        refined.add(index);
+        const branch = "include" in steps[index] ? IncludeMarkerSchema : StepSchema;
+        const branchResult = branch.safeParse(steps[index]);
+        if (!branchResult.success) {
+          for (const sub of branchResult.error.issues) {
+            out.push({ path: formatPath(["steps", index, ...sub.path]), message: sub.message });
+          }
+        }
+      }
+      continue;
+    }
+    out.push({ path: formatPath(issue.path), message: issue.message });
+  }
+
+  return out;
+}
+
+export function formatPath(path: ReadonlyArray<PropertyKey>): string {
+  let out = "";
+  for (const seg of path) {
+    if (typeof seg === "number") out += `[${seg}]`;
+    else out += out ? `.${String(seg)}` : String(seg);
+  }
+  return out || "(root)";
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// Keys in `input` absent from the schema-parsed `parsed` were stripped — collect their paths.
+function collectUnknownKeys(input: unknown, parsed: unknown, path: PropertyKey[]): string[] {
+  if (Array.isArray(input) && Array.isArray(parsed)) {
+    const out: string[] = [];
+    for (let i = 0; i < input.length; i += 1) out.push(...collectUnknownKeys(input[i], parsed[i], [...path, i]));
+    return out;
+  }
+  if (isPlainObject(input) && isPlainObject(parsed)) {
+    const out: string[] = [];
+    for (const key of Object.keys(input)) {
+      if (!(key in parsed)) out.push(formatPath([...path, key]));
+      else out.push(...collectUnknownKeys(input[key], parsed[key], [...path, key]));
+    }
+    return out;
+  }
+  return [];
 }
 
 export function applyVars(json: string, vars: Record<string, string>): string {

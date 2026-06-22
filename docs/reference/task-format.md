@@ -1,11 +1,22 @@
 # Task format reference
 
-The task JSON is validated by a Zod schema. Unknown keys are stripped — match field names exactly.
+The task JSON is validated by a Zod schema. At runtime unknown keys are stripped — but run `handback validate <task.json>` first and it will flag them (along with missing/malformed fields and bad `requires`) so a typo doesn't vanish silently.
+
+A machine-readable JSON Schema ships with the package at [`schema/task.schema.json`](https://raw.githubusercontent.com/phin-tech/handback/main/schema/task.schema.json), generated from the same Zod definitions as this reference. Point a task file's `$schema` at it for editor autocomplete and inline validation:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/phin-tech/handback/main/schema/task.schema.json",
+  "title": "…",
+  "steps": []
+}
+```
 
 ## Task
 
 | Field | Type | Notes |
 | --- | --- | --- |
+| `$schema` | `string` | Optional. JSON Schema URL for editor validation; ignored at runtime. |
 | `title` | `string` | Required. Shown in the runbook header. |
 | `steps` | `Step[]` | Required. At least one step. |
 

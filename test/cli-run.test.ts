@@ -78,6 +78,87 @@ test("help lists doctor", async () => {
   assert.match(stderr, /handback doctor/);
 });
 
+async function runCli(args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {}) {
+  const child = spawn(process.execPath, ["--import", "tsx", "src/cli.ts", ...args], {
+    cwd: opts.cwd ?? process.cwd(),
+    env: { ...process.env, ...opts.env },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => (stdout += String(chunk)));
+  child.stderr.on("data", (chunk) => (stderr += String(chunk)));
+  const [code] = (await once(child, "exit")) as [number];
+  return { code, stdout, stderr };
+}
+
+test("validate exits 0 on a good task file", async () => {
+  const { code, stdout } = await runCli(["validate", "examples/sample-task.json"]);
+  assert.equal(code, 0);
+  assert.match(stdout, /valid \(2 steps\)/);
+});
+
+test("validate exits non-zero and reports the failing field on a bad task file", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-validate-test-"));
+  try {
+    const taskPath = join(dir, "bad.json");
+    await writeFile(taskPath, JSON.stringify({ title: "T", steps: [{ id: "a", requires: ["x"] }] }));
+    const { code, stderr } = await runCli(["validate", taskPath]);
+    assert.equal(code, 1);
+    assert.match(stderr, /steps\[0\]\.title/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("validate flags an unknown field", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-validate-unknown-"));
+  try {
+    const taskPath = join(dir, "typo.json");
+    await writeFile(taskPath, JSON.stringify({ title: "T", steps: [{ id: "s", title: "S", titel: "typo" }] }));
+    const { code, stderr } = await runCli(["validate", taskPath]);
+    assert.equal(code, 1);
+    assert.match(stderr, /steps\[0\]\.titel: unknown field/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("validate catches an unknown field inside an included task", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-validate-include-"));
+  try {
+    await writeFile(join(dir, "root.json"), JSON.stringify({ title: "Root", steps: [{ id: "prep", title: "Prep" }, { include: "smoke" }] }));
+    await writeFile(join(dir, "smoke.json"), JSON.stringify({ title: "Smoke", steps: [{ id: "verify", title: "Verify", titel: "typo" }] }));
+    const { code, stderr } = await runCli(["validate", join(dir, "root.json")], { env: { HANDBACK_PLANS: dir } });
+    assert.equal(code, 1);
+    assert.match(stderr, /smoke: steps\[0\]\.titel: unknown field/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("schema prints the task JSON Schema to stdout", async () => {
+  const { code, stdout } = await runCli(["schema"]);
+  assert.equal(code, 0);
+  const parsed = JSON.parse(stdout) as { $id?: string; type?: string };
+  assert.match(parsed.$id ?? "", /task\.schema\.json$/);
+  assert.equal(parsed.type, "object");
+});
+
+test("doctor <file> validates the task instead of printing the skill hint", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-doctor-file-"));
+  try {
+    const taskPath = join(dir, "bad.json");
+    await writeFile(taskPath, JSON.stringify({ steps: [] }));
+    const { code, stderr, stdout } = await runCli(["doctor", taskPath]);
+    assert.equal(code, 1);
+    assert.match(stderr, /Validation failed/);
+    assert.doesNotMatch(stdout, /npx skills add/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("run blocks until finish and then prints result JSON", async () => {
   const dir = await mkdtemp(join(tmpdir(), "handback-run-test-"));
   const taskPath = join(dir, "task.json");

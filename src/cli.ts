@@ -4,9 +4,10 @@ import { readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import { createSession, buildResult, parseRawTask, resolveIncludes, applyVars, type Task } from "./core.js";
+import { createSession, buildResult, parseRawTask, resolveIncludes, applyVars, validateRawTask, type Task } from "./core.js";
 import { createSessionStore } from "./session-store.js";
 import { openUrl } from "./server.js";
+import { buildTaskJsonSchema } from "./schema.js";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -20,7 +21,9 @@ try {
   else if (command === "open") await open(args[1]);
   else if (command === "list") await list();
   else if (command === "tee") await tee(args[1], args[2], args[3]);
-  else if (command === "doctor") doctor();
+  else if (command === "validate") await validate(args[1]);
+  else if (command === "schema") schema();
+  else if (command === "doctor") await doctor(args[1]);
   else if (command === "--version" || command === "-v") version();
   else help(command ? 1 : 0);
 } catch (error) {
@@ -74,9 +77,146 @@ async function list(): Promise<void> {
   }
 }
 
-function doctor(): void {
+async function doctor(fileArg: string | undefined): Promise<void> {
+  // `doctor <file>` validates the task; bare `doctor` prints setup hints.
+  if (fileArg) {
+    await validate(fileArg);
+    return;
+  }
   console.log(`Agent skill:
-  npx skills add phin-tech/handback`);
+  npx skills add phin-tech/handback
+
+Validate a task file:
+  handback validate <task.json>`);
+}
+
+async function validate(nameOrPath: string | undefined): Promise<void> {
+  if (!nameOrPath) throw new Error("Usage: handback validate <task.json|name> [--var key=value ...]");
+  const vars = parseVars(args.slice(2));
+  const filePath = await resolvePlanPath(nameOrPath);
+  const schema = buildTaskJsonSchema();
+
+  // Phase 1: structurally validate the root *and every included file*, reporting unknown/typo'd
+  // fields per file. loadTask (phase 2) strips unknown keys silently, so without this a typo in
+  // an included runbook would pass unnoticed.
+  const errors: string[] = [];
+  await collectFileErrors(filePath, vars, "", errors, schema, new Set());
+
+  // Phase 2: cross-step checks (duplicate ids, unknown `requires`) and include resolution, only
+  // once every file is structurally sound. loadTask reuses the exact pipeline `run` uses, so a
+  // clean validate means a runnable file.
+  if (errors.length === 0) {
+    try {
+      const task = await loadTask(filePath, vars);
+      console.log(`✓ ${filePath} — valid (${task.steps.length} step${task.steps.length === 1 ? "" : "s"})`);
+      return;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  fail(errors);
+}
+
+// Validate one task file (read → vars → parse → schema → unknown keys), then recurse into its
+// `include` markers so the whole tree is checked. Errors are prefixed with `<source>: ` for any
+// file other than the root so the operator can tell which runbook is at fault.
+async function collectFileErrors(
+  filePath: string,
+  vars: Record<string, string>,
+  label: string,
+  errors: string[],
+  schema: Record<string, unknown>,
+  seen: Set<string>
+): Promise<void> {
+  if (seen.has(filePath)) return;
+  seen.add(filePath);
+
+  let source: string;
+  try {
+    source = await readFile(filePath, "utf8");
+  } catch {
+    errors.push(`${label}cannot read file: ${filePath}`);
+    return;
+  }
+
+  let json = source;
+  if (Object.keys(vars).length > 0) {
+    try {
+      json = applyVars(json, vars);
+    } catch (error) {
+      errors.push(`${label}${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+  }
+
+  let data: unknown;
+  try {
+    data = JSON.parse(json);
+  } catch (error) {
+    errors.push(`${label}invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+    return;
+  }
+
+  const report = validateRawTask(data);
+  if (!report.ok) {
+    for (const issue of report.issues) errors.push(`${label}${formatIssue(issue.path, issue.message, schema)}`);
+    return;
+  }
+  for (const key of report.unknownKeys) {
+    errors.push(`${label}${key}: unknown field — not part of the task schema (typo? wrong nesting?)`);
+  }
+
+  for (const entry of report.parsed.steps) {
+    if ("include" in entry) {
+      const subPath = await resolvePlanPath(entry.include);
+      await collectFileErrors(subPath, entry.vars ?? {}, `${entry.include}: `, errors, schema, seen);
+    }
+  }
+}
+
+// Print the JSON Schema for a task file to stdout. The agent already has the CLI, so this is
+// its zero-setup, version-matched way to fetch the full machine-readable field spec on demand —
+// no path-finding into node_modules, no network.
+function schema(): void {
+  console.log(JSON.stringify(buildTaskJsonSchema(), null, 2));
+}
+
+// Print errors against a file and exit non-zero so validate is CI/agent-friendly.
+function fail(messages: string[]): never {
+  console.error("✗ Validation failed:");
+  for (const message of messages) console.error(`  • ${message}`);
+  process.exit(1);
+}
+
+function formatIssue(path: string, message: string, schema: Record<string, unknown>): string {
+  const hint = describeAt(schema, path);
+  return hint ? `${path}: ${message}\n      ↳ ${hint}` : `${path}: ${message}`;
+}
+
+// Best-effort lookup of a field's `description` in the JSON Schema for a dotted/indexed path,
+// so a validation error can tell the agent what the field is for, not just where it failed.
+function describeAt(schema: Record<string, unknown>, path: string): string | undefined {
+  if (path === "(root)") return undefined;
+  const segments = path.match(/[^.[\]]+/g) ?? [];
+  let node: Record<string, unknown> | undefined = schema;
+  for (const segment of segments) {
+    node = childSchema(node, segment);
+    if (!node) return undefined;
+  }
+  return typeof node.description === "string" ? node.description : undefined;
+}
+
+function childSchema(node: Record<string, unknown> | undefined, segment: string): Record<string, unknown> | undefined {
+  if (!node) return undefined;
+  const branches = (node.anyOf as Record<string, unknown>[] | undefined) ?? (node.oneOf as Record<string, unknown>[] | undefined) ?? [node];
+  const isIndex = /^\d+$/.test(segment);
+  for (const branch of branches) {
+    if (isIndex && branch.items) return branch.items as Record<string, unknown>;
+    const properties = branch.properties as Record<string, Record<string, unknown>> | undefined;
+    if (!isIndex && properties && segment in properties) return properties[segment];
+  }
+  return undefined;
 }
 
 async function waitForUrl(id: string) {
@@ -133,7 +273,9 @@ function help(code: number): never {
   handback open <session-id>
   handback list
   handback tee <session-id> <step-id> <input-id> [--file <path>]
-  handback doctor
+  handback validate <task.json|name> [--var key=value ...]
+  handback schema
+  handback doctor [task.json]
 
   Names resolve from $HANDBACK_PLANS/<name>.json or .handback/<name>.json in the git root.
   Template vars in task files use {{name}} syntax.`);

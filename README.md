@@ -85,6 +85,8 @@ blockers are done). Click **Finish** and the command prints the result to stdout
 Full field-by-field reference:
 [`docs/reference/task-format.md`](docs/reference/task-format.md).
 A complete, realistic example: [`examples/cross-service-release.json`](examples/cross-service-release.json).
+A machine-readable JSON Schema ships at [`schema/task.schema.json`](schema/task.schema.json) —
+reference it via `$schema` for editor autocomplete, and run `handback validate` before `run`.
 
 ## CLI
 
@@ -95,7 +97,9 @@ handback wait <session-id>    Block until a started session finishes, print its 
 handback status <session-id>  Print a session (token redacted)
 handback open <session-id>    Open a session's URL in the browser
 handback list                 List sessions
-handback doctor               Print optional setup checks and install hints
+handback validate <task.json> Check a task file (fields, requires, includes); non-zero on failure
+handback schema               Print the task-file JSON Schema to stdout
+handback doctor [task.json]   Print setup hints, or validate a task file if one is given
 ```
 
 Sessions persist as JSON under `~/.handback/sessions/` (override the base dir with

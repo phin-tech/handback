@@ -1,0 +1,582 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/phin-tech/handback/main/schema/task.schema.json",
+  "title": "Handback task",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "Optional JSON Schema URL for editor validation; ignored at runtime.",
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Shown in the runbook header."
+    },
+    "steps": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Unique within the task; referenced by other steps' `requires`."
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Step heading shown to the operator."
+              },
+              "body": {
+                "description": "Prose instructions (newlines preserved).",
+                "type": "string"
+              },
+              "note": {
+                "description": "Collapsible \"from the AI\" callout for context/gotchas.",
+                "type": "string"
+              },
+              "source": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "repo",
+                      "tool"
+                    ],
+                    "description": "`repo` → blue GitHub-style tag; `tool` → purple tag for non-GitHub systems."
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Tag text, e.g. \"phin-tech/orders-svc\" or \"LaunchDarkly · production\"."
+                  },
+                  "href": {
+                    "description": "Optional URL — makes the tag a link.",
+                    "type": "string",
+                    "format": "uri"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "label"
+                ],
+                "description": "Where the step happens, rendered as a tag.",
+                "additionalProperties": false
+              },
+              "links": {
+                "description": "Reference links.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Link text."
+                    },
+                    "href": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Link URL."
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "href"
+                  ],
+                  "description": "A reference link.",
+                  "additionalProperties": false
+                }
+              },
+              "commands": {
+                "description": "Shell snippets, each rendered with a copy button.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "requires": {
+                "description": "Step ids that must be done/skipped before this one unlocks.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "inputs": {
+                "description": "Data to collect from the human.",
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Unique within the step; the value the human enters is keyed by this id in the result."
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Field label shown to the operator."
+                        },
+                        "required": {
+                          "description": "When true, the step can't be completed until this field has a value.",
+                          "type": "boolean"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "text",
+                          "description": "Single-line text input → string value."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "kind"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Unique within the step; the value the human enters is keyed by this id in the result."
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Field label shown to the operator."
+                        },
+                        "required": {
+                          "description": "When true, the step can't be completed until this field has a value.",
+                          "type": "boolean"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "textarea",
+                          "description": "Multi-line text input → string value."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "kind"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Unique within the step; the value the human enters is keyed by this id in the result."
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Field label shown to the operator."
+                        },
+                        "required": {
+                          "description": "When true, the step can't be completed until this field has a value.",
+                          "type": "boolean"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "checkbox",
+                          "description": "Single checkbox → boolean value."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "kind"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Unique within the step; the value the human enters is keyed by this id in the result."
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Field label shown to the operator."
+                        },
+                        "required": {
+                          "description": "When true, the step can't be completed until this field has a value.",
+                          "type": "boolean"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "select",
+                          "description": "Pick one of `options` → string value."
+                        },
+                        "options": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "The choices to pick from."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "kind",
+                        "options"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Unique within the step; the value the human enters is keyed by this id in the result."
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Field label shown to the operator."
+                        },
+                        "required": {
+                          "description": "When true, the step can't be completed until this field has a value.",
+                          "type": "boolean"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "multiselect",
+                          "description": "Pick any of `options` → string[] value."
+                        },
+                        "options": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "The choices to pick from."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "kind",
+                        "options"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ],
+                  "description": "Data collected from the human. Discriminated on `kind`."
+                }
+              },
+              "confirms": {
+                "description": "Operator tick-list (human-verified).",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Unique within the step; keys the confirm's boolean in the result."
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "What the operator is vouching for, e.g. \"/healthz returns 200\"."
+                    },
+                    "required": {
+                      "description": "When true, the step can't be completed until this is ticked.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label"
+                  ],
+                  "description": "A manual checkbox the operator ticks. Use for things only a human can verify; use `checks` for anything a machine can.",
+                  "additionalProperties": false
+                }
+              },
+              "checks": {
+                "description": "System-owned, auto-evaluated checks.",
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Unique within the step; keys the check result."
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Plain-language statement of what passing means, e.g. \"phin-tech/orders-svc#88 is merged\"."
+                        },
+                        "owner": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "GitHub repo owner (org or user)."
+                        },
+                        "repo": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "GitHub repo name."
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "Pull request number."
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "github_pr_review_decision",
+                          "description": "Passes when the PR's review decision equals `expect`."
+                        },
+                        "expect": {
+                          "default": "APPROVED",
+                          "description": "Required review decision. Defaults to APPROVED.",
+                          "type": "string",
+                          "enum": [
+                            "APPROVED",
+                            "REVIEW_REQUIRED",
+                            "CHANGES_REQUESTED"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "owner",
+                        "repo",
+                        "number",
+                        "kind"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Unique within the step; keys the check result."
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Plain-language statement of what passing means, e.g. \"phin-tech/orders-svc#88 is merged\"."
+                        },
+                        "owner": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "GitHub repo owner (org or user)."
+                        },
+                        "repo": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "GitHub repo name."
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "Pull request number."
+                        },
+                        "kind": {
+                          "type": "string",
+                          "const": "github_pr_merged",
+                          "description": "Passes when the PR state is MERGED."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "owner",
+                        "repo",
+                        "number",
+                        "kind"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ],
+                  "description": "System-owned check auto-evaluated via the `gh` CLI. Not for the human to tick. Discriminated on `kind`."
+                }
+              },
+              "paths": {
+                "description": "Two or more alternative ways to satisfy the step.",
+                "minItems": 2,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Unique within the step."
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Shown on the segmented path switch."
+                    },
+                    "outcome": {
+                      "description": "Recorded in the result when the step is completed on this path (e.g. \"rolled back\"). Omit for the happy path.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "body": {
+                      "description": "Path-specific instructions.",
+                      "type": "string"
+                    },
+                    "commands": {
+                      "description": "Path-specific shell snippets.",
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "links": {
+                      "description": "Path-specific reference links.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Link text."
+                          },
+                          "href": {
+                            "type": "string",
+                            "format": "uri",
+                            "description": "Link URL."
+                          }
+                        },
+                        "required": [
+                          "label",
+                          "href"
+                        ],
+                        "description": "A reference link.",
+                        "additionalProperties": false
+                      }
+                    },
+                    "confirms": {
+                      "description": "Path-specific confirms — only the selected path's required confirms gate completion.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Unique within the step; keys the confirm's boolean in the result."
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "What the operator is vouching for, e.g. \"/healthz returns 200\"."
+                          },
+                          "required": {
+                            "description": "When true, the step can't be completed until this is ticked.",
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label"
+                        ],
+                        "description": "A manual checkbox the operator ticks. Use for things only a human can verify; use `checks` for anything a machine can.",
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label"
+                  ],
+                  "description": "An alternative way to satisfy a step (e.g. a fallback / rollback).",
+                  "additionalProperties": false
+                }
+              },
+              "autoCompleteWhen": {
+                "default": "never",
+                "description": "Auto-mark the step done when all checks pass. Defaults to \"never\".",
+                "type": "string",
+                "enum": [
+                  "never",
+                  "checks_pass"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "description": "One unit of work the human does.",
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "include": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name or path of another task file to inline as a sub-plan."
+              },
+              "as": {
+                "description": "Namespace prefix for the included steps' ids. Defaults to the file's base name.",
+                "type": "string",
+                "minLength": 1
+              },
+              "vars": {
+                "description": "Template variables passed to the included file.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "include"
+            ],
+            "description": "Inlines another task file's steps in place, namespaced.",
+            "additionalProperties": false
+          }
+        ]
+      },
+      "description": "Ordered steps and/or include markers; at least one."
+    }
+  },
+  "required": [
+    "title",
+    "steps"
+  ],
+  "description": "A handback runbook as authored on disk, before include markers are resolved.",
+  "additionalProperties": false
+}
