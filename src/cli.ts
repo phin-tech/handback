@@ -4,7 +4,18 @@ import { readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import { createSession, buildResult, parseRawTask, resolveIncludes, applyVars, validateRawTask, type Task } from "./core.js";
+import {
+  answerQuestion,
+  createSession,
+  buildResult,
+  nextQuestionEvent,
+  parseRawTask,
+  resolveIncludes,
+  applyVars,
+  updateStep,
+  validateRawTask,
+  type Task
+} from "./core.js";
 import { createSessionStore } from "./session-store.js";
 import { openUrl } from "./server.js";
 import { buildTaskJsonSchema } from "./schema.js";
@@ -17,6 +28,8 @@ try {
   if (command === "run") await run(args[1]);
   else if (command === "start") await start(args[1]);
   else if (command === "wait") await wait(args[1]);
+  else if (command === "answer") await answer(args[1], args[2], args.slice(3).join(" "));
+  else if (command === "update-step") await updateStepCommand(args[1], args[2]);
   else if (command === "status") await status(args[1]);
   else if (command === "open") await open(args[1]);
   else if (command === "list") await list();
@@ -48,12 +61,65 @@ async function wait(id: string | undefined): Promise<void> {
   if (!id) throw new Error("Usage: handback wait <session-id>");
   for (;;) {
     const session = await store.load(id);
+    const question = nextQuestionEvent(session);
+    if (question) {
+      console.log(JSON.stringify(question, null, 2));
+      return;
+    }
     if (session.status === "finished") {
       console.log(JSON.stringify(buildResult(session), null, 2));
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
+}
+
+async function answer(id: string | undefined, questionId: string | undefined, text: string): Promise<void> {
+  if (!id || !questionId || !text) throw new Error("Usage: handback answer <session-id> <question-id> <answer>");
+  const session = await store.load(id);
+  if (session.port) {
+    await postLive({ port: session.port, token: session.token }, `/api/agent/questions/${encodeURIComponent(questionId)}/answer`, { answer: text });
+    return;
+  }
+  await store.save(answerQuestion(session, { questionId, answer: text, now: new Date().toISOString() }));
+}
+
+async function updateStepCommand(id: string | undefined, stepId: string | undefined): Promise<void> {
+  if (!id || !stepId) throw new Error("Usage: handback update-step <session-id> <step-id> --json '<partial step>'");
+  const jsonIdx = args.indexOf("--json");
+  const json = jsonIdx === -1 ? undefined : args[jsonIdx + 1];
+  if (!json) throw new Error("--json requires a JSON object");
+  const patch = JSON.parse(json);
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("--json must be an object");
+  const session = await store.load(id);
+  if (session.port) {
+    await patchLive({ port: session.port, token: session.token }, `/api/agent/steps/${encodeURIComponent(stepId)}`, patch);
+    return;
+  }
+  await store.save(updateStep(session, { stepId, patch, now: new Date().toISOString() }));
+}
+
+async function postLive(session: { port: number; token: string }, path: string, body: unknown): Promise<void> {
+  const res = await fetch(`http://127.0.0.1:${session.port}${path}?token=${encodeURIComponent(session.token)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(await responseError(res));
+}
+
+async function patchLive(session: { port: number; token: string }, path: string, body: unknown): Promise<void> {
+  const res = await fetch(`http://127.0.0.1:${session.port}${path}?token=${encodeURIComponent(session.token)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(await responseError(res));
+}
+
+async function responseError(res: Response): Promise<string> {
+  const err = await res.json().catch(() => ({})) as { error?: string };
+  return err.error ?? `request failed: ${res.status}`;
 }
 
 async function status(id: string | undefined): Promise<void> {
@@ -269,6 +335,8 @@ function help(code: number): never {
   handback run <task.json|name> [--var key=value ...]
   handback start <task.json|name> [--var key=value ...]
   handback wait <session-id>
+  handback answer <session-id> <question-id> <answer>
+  handback update-step <session-id> <step-id> --json '<partial step>'
   handback status <session-id>
   handback open <session-id>
   handback list

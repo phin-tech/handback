@@ -31,6 +31,11 @@
                 "minLength": 1,
                 "description": "Step heading shown to the operator."
               },
+              "askable": {
+                "default": true,
+                "description": "When true, the operator can ask the agent questions from this step. Defaults to true.",
+                "type": "boolean"
+              },
               "body": {
                 "description": "Prose instructions (newlines preserved).",
                 "type": "string"

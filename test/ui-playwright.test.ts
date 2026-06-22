@@ -87,6 +87,70 @@ test("browser completes a runbook and persists the result", async () => {
   }
 });
 
+test("browser asks the agent and refreshes the answer inline", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-ui-question-test-"));
+  const store = createSessionStore(dir);
+  await store.save(
+    createSession({
+      id: "hb_ui_question",
+      token: "secret",
+      now: "now",
+      task: parseTask({ title: "Questions", steps: [{ id: "review", title: "Review PR" }] })
+    })
+  );
+
+  let browser: Browser | undefined;
+  let vite: ViteDevServer | undefined;
+  let backend: Awaited<ReturnType<typeof serveSession>> | undefined;
+
+  try {
+    backend = await serveSession({ id: "hb_ui_question", sessionDir: dir, open: false });
+    vite = await createViteServer({
+      configFile: false,
+      root: "ui",
+      plugins: [svelte()],
+      server: {
+        host: "127.0.0.1",
+        port: 0,
+        proxy: { "/api": `http://127.0.0.1:${backend.port}` }
+      }
+    });
+    await vite.listen();
+    const url = vite.resolvedUrls?.local[0];
+    assert.ok(url);
+
+    browser = await chromium.launch();
+    const page = await browser.newPage();
+    await page.goto(`${url}?token=secret`);
+    await page.getByRole("heading", { name: "Questions" }).first().waitFor();
+
+    await page.getByPlaceholder("Ask the agent").fill("Which option?");
+    await page.getByRole("button", { name: "Ask" }).click();
+    await page.getByText("Which option?").waitFor();
+
+    const saved = await store.load("hb_ui_question");
+    const questionId = saved.steps.review.questions?.[0]?.id;
+    assert.ok(questionId);
+
+    const res = await fetch(`http://127.0.0.1:${backend.port}/api/agent/questions/${questionId}/answer?token=secret`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ answer: "Use option A." })
+    });
+    assert.equal(res.status, 200);
+
+    await page.getByText("Use option A.").waitFor();
+  } finally {
+    await browser?.close();
+    await vite?.close();
+    if (backend) {
+      backend.close();
+      await backend.closed;
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 function step(page: Page, title: string): Locator {
   return page.locator("section.step").filter({ hasText: title });
 }

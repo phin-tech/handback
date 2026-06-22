@@ -114,3 +114,66 @@ test("agent step append validates the body through StepSchema", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("operator questions and agent answers persist through the server", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-question-server-test-"));
+  try {
+    const store = createSessionStore(dir);
+    await store.save(
+      createSession({ id: "hb_questions", token: "secret", now: "now", task: parseTask({ title: "T", steps: [{ id: "s", title: "Step" }] }) })
+    );
+
+    const server = await serveSession({ id: "hb_questions", sessionDir: dir, open: false });
+    try {
+      const asked = await fetch(`http://127.0.0.1:${server.port}/api/steps/s/questions?token=secret`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: "Which option?" })
+      });
+      assert.equal(asked.status, 200);
+      const askedBody = await asked.json() as { question: { id: string } };
+
+      const answered = await fetch(`http://127.0.0.1:${server.port}/api/agent/questions/${askedBody.question.id}/answer?token=secret`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ answer: "Use option A." })
+      });
+      assert.equal(answered.status, 200);
+
+      const status = await fetch(`http://127.0.0.1:${server.port}/api/status?token=secret`);
+      const body = await status.json() as { session: { steps: Record<string, { questions?: Array<{ text: string; answer?: string }> }> } };
+      assert.deepEqual(body.session.steps.s.questions?.map((q) => [q.text, q.answer]), [["Which option?", "Use option A."]]);
+    } finally {
+      server.close();
+      await server.closed;
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("agent can update a live step through the server", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-step-update-server-test-"));
+  try {
+    const store = createSessionStore(dir);
+    await store.save(
+      createSession({ id: "hb_update_step", token: "secret", now: "now", task: parseTask({ title: "T", steps: [{ id: "s", title: "Old" }] }) })
+    );
+
+    const server = await serveSession({ id: "hb_update_step", sessionDir: dir, open: false });
+    try {
+      const res = await fetch(`http://127.0.0.1:${server.port}/api/agent/steps/s?token=secret`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "New", body: "Updated instructions." })
+      });
+      assert.equal(res.status, 200);
+      assert.equal((await store.load("hb_update_step")).task.steps[0].title, "New");
+    } finally {
+      server.close();
+      await server.closed;
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

@@ -1,6 +1,6 @@
 {
   "name": "handback",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Hand control from an agent to a human via a local web runbook.",
   "type": "module",
   "license": "MIT",

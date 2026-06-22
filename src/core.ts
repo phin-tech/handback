@@ -72,6 +72,7 @@ export const PathSchema = z.object({
 export const StepSchema = z.object({
   id: z.string().min(1).describe("Unique within the task; referenced by other steps' `requires`."),
   title: z.string().min(1).describe("Step heading shown to the operator."),
+  askable: z.boolean().default(true).describe("When true, the operator can ask the agent questions from this step. Defaults to true."),
   body: z.string().optional().describe("Prose instructions (newlines preserved)."),
   note: z.string().optional().describe("Collapsible \"from the AI\" callout for context/gotchas."),
   source: SourceSchema.optional(),
@@ -99,10 +100,19 @@ export type Path = z.infer<typeof PathSchema>;
 export type StepStatus = z.infer<typeof StepStatusSchema>;
 export type SessionOutcome = z.infer<typeof SessionOutcomeSchema>;
 export type InputValue = string | boolean | string[];
+export type StepQuestion = {
+  id: string;
+  text: string;
+  askedAt: string;
+  answer?: string;
+  answeredAt?: string;
+  updatedAt?: string;
+};
 
 export type StepState = {
   status: StepStatus;
   inputs: Record<string, InputValue>;
+  questions?: StepQuestion[];
   selectedPath?: string;
   completedAt?: string;
   skippedAt?: string;
@@ -129,6 +139,33 @@ export type CheckResult = {
   id: string;
   status: "pass" | "fail" | "unavailable";
   output?: string;
+};
+
+export type StepResult = {
+  id: string;
+  status: StepStatus;
+  outcome: string;
+  inputs: Record<string, InputValue>;
+  selectedPath?: string;
+  completedAt?: string;
+  skippedAt?: string;
+  blockedAt?: string;
+  questions?: StepQuestion[];
+};
+
+export type SessionResult = {
+  sessionId: string;
+  outcome?: SessionOutcome;
+  finishedAt?: string;
+  reason?: string;
+  steps: StepResult[];
+};
+
+export type QuestionEvent = {
+  type: "question";
+  sessionId: string;
+  stepId: string;
+  question: StepQuestion;
 };
 
 export const IncludeMarkerSchema = z.object({
@@ -333,6 +370,7 @@ export function applyHumanStepUpdate(
     steps: {
       ...session.steps,
       [input.stepId]: {
+        ...current,
         status: input.status,
         inputs: nextInputs,
         selectedPath: nextSelectedPath,
@@ -375,6 +413,95 @@ export function applyInputUpdate(
   };
 }
 
+export function appendQuestion(
+  session: Session,
+  input: { stepId: string; id: string; text: string; now: string }
+): Session {
+  const step = session.task.steps.find((candidate) => candidate.id === input.stepId);
+  if (!step) throw new Error(`Unknown step: ${input.stepId}`);
+  if (step.askable === false) throw new Error(`Step is not askable: ${input.stepId}`);
+  const current = session.steps[input.stepId];
+  if (!current) throw new Error(`Missing state for step: ${input.stepId}`);
+  const text = input.text.trim();
+  if (!text) throw new Error("Question text is required");
+
+  return {
+    ...session,
+    steps: {
+      ...session.steps,
+      [input.stepId]: {
+        ...current,
+        questions: [...(current.questions ?? []), { id: input.id, text, askedAt: input.now }],
+        updatedAt: input.now
+      }
+    }
+  };
+}
+
+export function answerQuestion(
+  session: Session,
+  input: { questionId: string; answer: string; now: string }
+): Session {
+  const answer = input.answer.trim();
+  if (!answer) throw new Error("Answer text is required");
+
+  for (const [stepId, state] of Object.entries(session.steps)) {
+    const questions = state.questions ?? [];
+    const idx = questions.findIndex((question) => question.id === input.questionId);
+    if (idx === -1) continue;
+    const current = questions[idx];
+    const nextQuestion: StepQuestion = {
+      ...current,
+      answer,
+      answeredAt: current.answeredAt ?? input.now,
+      updatedAt: current.answer === undefined ? current.updatedAt : input.now
+    };
+    return {
+      ...session,
+      steps: {
+        ...session.steps,
+        [stepId]: {
+          ...state,
+          questions: questions.map((question, i) => (i === idx ? nextQuestion : question)),
+          updatedAt: input.now
+        }
+      }
+    };
+  }
+
+  throw new Error(`Unknown question: ${input.questionId}`);
+}
+
+export function nextQuestionEvent(session: Session): QuestionEvent | undefined {
+  for (const step of session.task.steps) {
+    for (const question of session.steps[step.id]?.questions ?? []) {
+      if (question.answer === undefined) return { type: "question", sessionId: session.id, stepId: step.id, question };
+    }
+  }
+  return undefined;
+}
+
+export function updateStep(
+  session: Session,
+  input: { stepId: string; patch: Partial<Step>; now: string }
+): Session {
+  if (input.patch.id !== undefined && input.patch.id !== input.stepId) throw new Error("Agent update cannot change step id");
+  const idx = session.task.steps.findIndex((step) => step.id === input.stepId);
+  if (idx === -1) throw new Error(`Unknown step: ${input.stepId}`);
+
+  const steps = session.task.steps.map((step, i) => (i === idx ? { ...step, ...input.patch, id: input.stepId } : step));
+  const task = parseTask({ ...session.task, steps });
+  const state = session.steps[input.stepId];
+  return {
+    ...session,
+    task,
+    steps: {
+      ...session.steps,
+      [input.stepId]: { ...state, updatedAt: input.now }
+    }
+  };
+}
+
 export function canFinish(session: Session): boolean {
   return Object.values(session.steps).every((step) => step.status === "done" || step.status === "skipped");
 }
@@ -401,14 +528,14 @@ export function applyAutoComplete(session: Session, results: Record<string, Chec
   return next;
 }
 
-export function buildResult(session: Session) {
-  const result = {
+export function buildResult(session: Session): SessionResult {
+  const result: SessionResult = {
     sessionId: session.id,
     outcome: session.outcome,
     finishedAt: session.finishedAt,
     steps: session.task.steps.map((step) => {
       const state = session.steps[step.id];
-      return {
+      const base = {
         id: step.id,
         status: state.status,
         outcome: stepOutcome(step, state),
@@ -418,6 +545,7 @@ export function buildResult(session: Session) {
         skippedAt: state.skippedAt,
         blockedAt: state.blockedAt
       };
+      return state.questions?.length ? { ...base, questions: state.questions } : base;
     })
   };
   return session.reason ? { ...result, reason: session.reason } : result;

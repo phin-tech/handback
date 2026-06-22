@@ -1,9 +1,22 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { applyAutoComplete, applyHumanStepUpdate, applyInputUpdate, buildResult, finishSession, type Session, StepSchema, StepStatusSchema } from "./core.js";
+import {
+  answerQuestion,
+  appendQuestion,
+  applyAutoComplete,
+  applyHumanStepUpdate,
+  applyInputUpdate,
+  buildResult,
+  finishSession,
+  type Session,
+  StepSchema,
+  StepStatusSchema,
+  updateStep
+} from "./core.js";
 import { runChecks } from "./checks.js";
 import { createSessionStore } from "./session-store.js";
 
@@ -32,6 +45,15 @@ export async function serveSession(input: { id: string; sessionDir?: string; ope
         if (req.method === "GET" && url.pathname === "/api/result") {
           if (session.status !== "finished") return empty(res, 204);
           return json(res, 200, buildResult(session));
+        }
+        if (req.method === "POST" && url.pathname.startsWith("/api/steps/") && url.pathname.endsWith("/questions")) {
+          const stepId = decodeURIComponent(url.pathname.slice("/api/steps/".length, -"/questions".length));
+          const body = await readJson(req);
+          const now = new Date().toISOString();
+          session = appendQuestion(session, { stepId, id: `q_${randomBytes(5).toString("base64url")}`, text: String(body.text ?? ""), now });
+          await store.save(session);
+          const question = session.steps[stepId]?.questions?.at(-1);
+          return json(res, 200, { session: publicSession(session), question });
         }
         if (req.method === "POST" && url.pathname.startsWith("/api/steps/")) {
           const stepId = decodeURIComponent(url.pathname.slice("/api/steps/".length));
@@ -66,6 +88,20 @@ export async function serveSession(input: { id: string; sessionDir?: string; ope
           if (idx === -1) return json(res, 404, { error: "step not found" });
           const steps = session.task.steps.map((s) => (s.id === stepId ? { ...s, commands: commands as string[] } : s));
           session = { ...session, task: { ...session.task, steps } };
+          await store.save(session);
+          return json(res, 200, publicSession(session));
+        }
+        if (req.method === "POST" && url.pathname.startsWith("/api/agent/questions/") && url.pathname.endsWith("/answer")) {
+          const questionId = decodeURIComponent(url.pathname.slice("/api/agent/questions/".length, -"/answer".length));
+          const body = await readJson(req);
+          session = answerQuestion(session, { questionId, answer: String(body.answer ?? ""), now: new Date().toISOString() });
+          await store.save(session);
+          return json(res, 200, publicSession(session));
+        }
+        if (req.method === "PATCH" && url.pathname.startsWith("/api/agent/steps/")) {
+          const stepId = decodeURIComponent(url.pathname.slice("/api/agent/steps/".length));
+          const body = await readJson(req);
+          session = updateStep(session, { stepId, patch: body, now: new Date().toISOString() });
           await store.save(session);
           return json(res, 200, publicSession(session));
         }

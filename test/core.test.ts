@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  answerQuestion,
+  appendQuestion,
   applyHumanStepUpdate,
   applyInputUpdate,
   applyVars,
   buildResult,
   canFinish,
   createSession,
+  nextQuestionEvent,
   parseRawTask,
   parseTask,
   resolveIncludes,
+  updateStep,
   validateRawTask
 } from "../src/core.js";
 
@@ -48,6 +52,58 @@ test("createSession initializes pending step state", () => {
   assert.equal(session.status, "active");
   assert.equal(session.steps["review-pr"].status, "pending");
   assert.equal(session.steps.ship.status, "pending");
+});
+
+test("askable defaults on but can be disabled", () => {
+  const parsed = parseTask({
+    title: "T",
+    steps: [
+      { id: "ask", title: "Ask" },
+      { id: "quiet", title: "Quiet", askable: false }
+    ]
+  });
+
+  assert.equal(parsed.steps[0].askable, true);
+  assert.equal(parsed.steps[1].askable, false);
+
+  const session = createSession({ id: "hb_q", token: "t", now: "t0", task: parsed });
+  assert.throws(() => appendQuestion(session, { stepId: "quiet", id: "q1", text: "Can I ask?", now: "t1" }), /not askable/);
+});
+
+test("questions wake wait, can be answered, and are included in the result", () => {
+  let session = createSession({ id: "hb_q", token: "t", now: "t0", task });
+
+  session = appendQuestion(session, { stepId: "review-pr", id: "q1", text: "Which PR?", now: "t1" });
+  assert.deepEqual(nextQuestionEvent(session), {
+    type: "question",
+    sessionId: "hb_q",
+    stepId: "review-pr",
+    question: { id: "q1", text: "Which PR?", askedAt: "t1" }
+  });
+
+  session = answerQuestion(session, { questionId: "q1", answer: "PR #2", now: "t2" });
+  assert.equal(nextQuestionEvent(session), undefined);
+
+  session = answerQuestion(session, { questionId: "q1", answer: "PR #3", now: "t3" });
+  session = { ...session, status: "finished", outcome: "incomplete", finishedAt: "t4" };
+  assert.deepEqual(buildResult(session).steps[0].questions, [
+    { id: "q1", text: "Which PR?", askedAt: "t1", answer: "PR #3", answeredAt: "t2", updatedAt: "t3" }
+  ]);
+});
+
+test("agent step updates merge through task validation and preserve state", () => {
+  const session = createSession({ id: "hb_step", token: "t", now: "t0", task });
+  const next = updateStep(session, {
+    stepId: "review-pr",
+    patch: { title: "Review updated PR", body: "Use the new diff." },
+    now: "t1"
+  });
+
+  assert.equal(next.task.steps[0].title, "Review updated PR");
+  assert.equal(next.task.steps[0].body, "Use the new diff.");
+  assert.equal(next.steps["review-pr"].status, "pending");
+  assert.throws(() => updateStep(session, { stepId: "review-pr", patch: { id: "renamed" }, now: "t2" }), /cannot change step id/);
+  assert.throws(() => updateStep(session, { stepId: "review-pr", patch: { requires: ["missing"] }, now: "t2" }), /Unknown required step/);
 });
 
 test("required inputs gate completion", () => {

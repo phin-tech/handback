@@ -287,6 +287,80 @@ test("tee --file writes content to disk and stores the path in the input", async
   }
 });
 
+test("wait returns a pending question and answer updates it", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-wait-question-test-"));
+  const taskPath = join(dir, "task.json");
+  await writeFile(taskPath, JSON.stringify({ title: "T", steps: [{ id: "s", title: "Step" }] }));
+
+  const starter = spawn(process.execPath, ["--import", "tsx", "src/cli.ts", "start", taskPath], {
+    cwd: process.cwd(),
+    env: { ...process.env, HANDBACK_HOME: dir, HANDBACK_OPEN: "0" },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  try {
+    let starterStdout = "";
+    starter.stdout.on("data", (chunk) => (starterStdout += String(chunk)));
+    const started = await waitFor(() => JSON.parse(starterStdout) as { sessionId: string; url: string; token: string });
+
+    const asked = await fetch(started.url.replace("/?", "/api/steps/s/questions?"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "Which option?" })
+    });
+    assert.equal(asked.status, 200);
+    const askedBody = await asked.json() as { question: { id: string } };
+
+    const waited = await runCli(["wait", started.sessionId], { env: { HANDBACK_HOME: dir } });
+    assert.equal(waited.code, 0);
+    assert.deepEqual(JSON.parse(waited.stdout), {
+      type: "question",
+      sessionId: started.sessionId,
+      stepId: "s",
+      question: { id: askedBody.question.id, text: "Which option?", askedAt: JSON.parse(waited.stdout).question.askedAt }
+    });
+
+    const answered = await runCli(["answer", started.sessionId, askedBody.question.id, "Use option A."], { env: { HANDBACK_HOME: dir } });
+    assert.equal(answered.code, 0);
+
+    const statusRes = await fetch(started.url.replace("/?", "/api/status?"));
+    const status = await statusRes.json() as { session: { steps: Record<string, { questions?: Array<{ answer?: string }> }> } };
+    assert.equal(status.session.steps.s.questions?.[0]?.answer, "Use option A.");
+  } finally {
+    if (starter.exitCode === null) starter.kill();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("update-step command changes the live step", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-update-step-cli-test-"));
+  const taskPath = join(dir, "task.json");
+  await writeFile(taskPath, JSON.stringify({ title: "T", steps: [{ id: "s", title: "Old" }] }));
+
+  const starter = spawn(process.execPath, ["--import", "tsx", "src/cli.ts", "start", taskPath], {
+    cwd: process.cwd(),
+    env: { ...process.env, HANDBACK_HOME: dir, HANDBACK_OPEN: "0" },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  try {
+    let starterStdout = "";
+    starter.stdout.on("data", (chunk) => (starterStdout += String(chunk)));
+    const started = await waitFor(() => JSON.parse(starterStdout) as { sessionId: string; url: string });
+
+    const updated = await runCli(["update-step", started.sessionId, "s", "--json", '{"title":"New","body":"Updated."}'], { env: { HANDBACK_HOME: dir } });
+    assert.equal(updated.code, 0);
+
+    const statusRes = await fetch(started.url.replace("/?", "/api/status?"));
+    const status = await statusRes.json() as { session: { task: { steps: Array<{ title: string; body?: string }> } } };
+    assert.equal(status.session.task.steps[0].title, "New");
+    assert.equal(status.session.task.steps[0].body, "Updated.");
+  } finally {
+    if (starter.exitCode === null) starter.kill();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("run resolves plan by name from HANDBACK_PLANS and substitutes --var", async () => {
   const dir = await mkdtemp(join(tmpdir(), "handback-plans-test-"));
   const plansDir = join(dir, "plans");

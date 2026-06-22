@@ -284,6 +284,30 @@ button.check:disabled { cursor: default; }
 .pill { font-size: 13px; color: var(--ink-2); background: var(--bg-2); border: 1px solid var(--rule-2); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
 .pill[aria-pressed="true"] { color: var(--done); border-color: color-mix(in srgb, var(--done) 50%, var(--rule-2)); background: var(--done-soft); }
 
+/* step Q&A */
+.ask { margin: 18px 0 0; display: grid; gap: 10px; }
+.thread { display: grid; gap: 8px; }
+.turn { display: grid; gap: 2px; max-width: 92%; }
+.turn span { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.turn p { width: fit-content; max-width: 100%; margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+.turn.human { justify-self: end; text-align: right; }
+.turn.human p { color: var(--ink); background: color-mix(in srgb, var(--accent) 16%, var(--bg-2)); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--rule-2)); }
+.turn.agent p { color: var(--ink-2); background: var(--bg-2); border: 1px solid var(--rule-2); }
+.turn.pending p { color: var(--muted); background: transparent; border: 1px dashed var(--rule-2); }
+.ask-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.ask-row input {
+  min-width: 0;
+  color: var(--ink);
+  background: var(--bg-2);
+  border: 1px solid var(--rule-2);
+  border-radius: 8px;
+  padding: 7px 9px;
+}
+.ask-row input:focus { outline: none; border-color: var(--accent); }
+.ask-row button { color: var(--ink); background: var(--bg-2); border: 1px solid var(--rule-2); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.ask-row button:hover { border-color: var(--ink-3); }
+.ask-row button:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* states */
 .step.done .title { text-decoration: line-through; text-decoration-color: var(--rule-2); color: var(--muted); }
 .step.done .box { background: var(--done); border-color: var(--done); color: #08110a; }

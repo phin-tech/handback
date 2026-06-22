@@ -16,6 +16,7 @@
   let collapsed = $state<Record<string, boolean>>({});
   let noteOpen = $state<Record<string, boolean>>({});
   let menuOpenId = $state("");
+  let questionDraft = $state<Record<string, string>>({});
 
   // Dirty tracking for autosave / poll-merge: a step is "dirty" while it has local edits not
   // yet confirmed saved. We never overwrite a dirty step's inputs from a poll.
@@ -133,6 +134,24 @@
     reconcileCollapse();
   }
 
+  async function askAgent(stepId: string): Promise<void> {
+    const text = (questionDraft[stepId] ?? "").trim();
+    if (!text) return;
+    const res = await fetch(`/api/steps/${encodeURIComponent(stepId)}/questions?token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      error = data.error ?? "question failed";
+      return;
+    }
+    questionDraft[stepId] = "";
+    session = mergeSession(data.session);
+    error = "";
+  }
+
   function scheduleSave(stepId: string): void {
     dirty[stepId] = true;
     const v = (dirtyVersion[stepId] = (dirtyVersion[stepId] ?? 0) + 1);
@@ -232,7 +251,7 @@
   }
 
   load().catch((err) => (error = err.message));
-  setInterval(() => load().catch(() => undefined), 5000);
+  setInterval(() => load().catch(() => undefined), 1000);
   $effect(() => {
     document.documentElement.dataset.theme = theme;
   });
@@ -444,6 +463,34 @@
                   {/if}
                 </div>
               {/each}
+            {/if}
+
+            {#if step.askable !== false}
+              <div class="ask">
+                {#if state.questions?.length}
+                  <div class="thread">
+                    {#each state.questions as question}
+                      <div class="turn human"><span>you</span><p>{question.text}</p></div>
+                      {#if question.answer}
+                        <div class="turn agent"><span>agent</span><p>{question.answer}</p></div>
+                      {:else}
+                        <div class="turn pending"><span>agent</span><p>waiting</p></div>
+                      {/if}
+                    {/each}
+                  </div>
+                {/if}
+                <div class="ask-row">
+                  <input
+                    type="text"
+                    placeholder="Ask the agent"
+                    value={questionDraft[step.id] ?? ""}
+                    disabled={finished}
+                    oninput={(e) => (questionDraft[step.id] = e.currentTarget.value)}
+                    onkeydown={(e) => e.key === "Enter" && (e.preventDefault(), askAgent(step.id))}
+                  />
+                  <button type="button" disabled={finished || !(questionDraft[step.id] ?? "").trim()} onclick={() => askAgent(step.id)}>Ask</button>
+                </div>
+              </div>
             {/if}
           </div>
         {/if}
