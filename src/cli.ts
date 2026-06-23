@@ -18,8 +18,9 @@ import {
   type Task
 } from "./core.js";
 import { createSessionStore } from "./session-store.js";
-import { openUrl } from "./server.js";
+import { openSession, findGlimpse } from "./server.js";
 import { buildTaskJsonSchema } from "./schema.js";
+import { configPath, loadConfig, resolveUseGlimpse } from "./config.js";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -148,7 +149,7 @@ async function open(id: string | undefined): Promise<void> {
   if (!id) throw new Error("Usage: handback open <session-id>");
   const session = await store.load(id);
   if (!session.url) throw new Error("Session has no URL yet");
-  openUrl(session.url);
+  await openSession(session.url);
 }
 
 async function list(): Promise<void> {
@@ -168,7 +169,32 @@ async function doctor(fileArg: string | undefined): Promise<void> {
   npx skills add phin-tech/handback
 
 Validate a task file:
-  handback validate <task.json>`);
+  handback validate <task.json>
+`);
+  reportGlimpse();
+}
+
+// Report how runbooks will open: a Glimpse native window when `glimpseui` is
+// installed and enabled, otherwise the system browser.
+function reportGlimpse(): void {
+  const installed = findGlimpse();
+  const enabled = resolveUseGlimpse();
+  console.log("Glimpse native window:");
+  if (!installed) {
+    console.log("  ✗ glimpseui not found on PATH — runbooks open in your browser");
+    console.log("    Install it for a native window: npm install -g glimpseui");
+    return;
+  }
+  console.log(`  ✓ glimpseui found: ${installed}`);
+  if (enabled) {
+    console.log("  ✓ enabled — runbooks open in a native window");
+  } else {
+    console.log("  ✗ disabled — runbooks open in your browser");
+    console.log(`    Re-enable via HANDBACK_GLIMPSE=1 or ${configPath()} ({ \"glimpse\": true })`);
+  }
+  if (loadConfig().glimpse === undefined && process.env.HANDBACK_GLIMPSE === undefined) {
+    console.log(`    Config: ${configPath()} (not set — defaulting to on)`);
+  }
 }
 
 async function validate(nameOrPath: string | undefined): Promise<void> {

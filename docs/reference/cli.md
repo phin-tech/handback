@@ -108,3 +108,36 @@ With no argument, prints setup hints (agent-skill install command). With a file 
 | --- | --- | --- |
 | `HANDBACK_HOME` | `~/.handback` | Base directory for session storage. |
 | `HANDBACK_OPEN` | `1` | Set to `0` to skip auto-opening the browser. |
+| `HANDBACK_GLIMPSE` | `1` | When [`glimpseui`](https://github.com/hazat/glimpse) is on `PATH`, runbooks open in a native window instead of the browser. Set to `0` to always use the browser. |
+| `HANDBACK_GLIMPSE_WIDTH` | `1100` | Width in pixels of the Glimpse native window. |
+| `HANDBACK_GLIMPSE_HEIGHT` | `900` | Height in pixels of the Glimpse native window. |
+| `HANDBACK_GLIMPSE_FLOATING` | `0` | Set to `1` to keep the Glimpse window floating above other windows. |
+| `HANDBACK_GLIMPSE_OPEN_LINKS_APP` | — | Full path to an app (e.g. `/Applications/Linear.app`) that opens http/https links from the Glimpse window. Defaults to the system browser. |
+| `HANDBACK_CONFIG` | `$XDG_CONFIG_HOME/handback/settings.json` | Path to the settings file. |
+
+## Settings file
+
+Persistent settings live at `~/.config/handback/settings.json` (honoring
+`$XDG_CONFIG_HOME`; override the whole path with `HANDBACK_CONFIG`):
+
+```json
+{
+  "glimpse": true,
+  "floating": false,
+  "openLinksApp": "/Applications/Linear.app"
+}
+```
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `glimpse` | `true` | Open runbooks in a [Glimpse](https://github.com/hazat/glimpse) native window when `glimpseui` is installed. `HANDBACK_GLIMPSE` overrides this. |
+| `floating` | `false` | Keep the Glimpse window floating above other windows. `HANDBACK_GLIMPSE_FLOATING` overrides this. |
+| `openLinksApp` | — | Full path to an app that opens http/https links. Point it at `/Applications/Linear.app` to open `linear.app` links in the desktop app. `HANDBACK_GLIMPSE_OPEN_LINKS_APP` overrides this. |
+
+Glimpse is detected on `PATH` and used only if installed — install it with
+`npm install -g glimpseui`. When it isn't present, handback opens the system
+browser as before. The `floating` and `openLinksApp` settings can also be
+changed from the runbook's **Settings** panel (⚙ in the top bar); they apply
+to the next runbook window. The "Open links in" dropdown lists browsers and
+apps detected on your machine (macOS), with a **Custom…** option for any other
+path.

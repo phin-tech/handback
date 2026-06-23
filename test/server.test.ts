@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -196,6 +196,79 @@ test("agent can update a live step through the server", async () => {
       await server.closed;
     }
   } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("config endpoint reads and writes Glimpse settings", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-config-api-"));
+  const savedConfigEnv = process.env.HANDBACK_CONFIG;
+  const savedGlimpseEnv = process.env.HANDBACK_GLIMPSE_FLOATING;
+  process.env.HANDBACK_CONFIG = join(dir, "settings.json");
+  delete process.env.HANDBACK_GLIMPSE_FLOATING;
+  try {
+    const store = createSessionStore(dir);
+    await store.save(
+      createSession({ id: "hb_config", token: "secret", now: "now", task: parseTask({ title: "T", steps: [{ id: "s", title: "Step" }] }) })
+    );
+
+    const server = await serveSession({ id: "hb_config", sessionDir: dir, open: false });
+    try {
+      const initial = await fetch(`http://127.0.0.1:${server.port}/api/config?token=secret`);
+      assert.equal(initial.status, 200);
+      const initialBody = await initial.json();
+      assert.equal(initialBody.glimpse, true);
+      assert.equal(initialBody.floating, false);
+      assert.equal(initialBody.openLinksApp, "");
+      assert.ok(Array.isArray(initialBody.apps));
+
+      const patched = await fetch(`http://127.0.0.1:${server.port}/api/config?token=secret`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ floating: true, openLinksApp: "Firefox" })
+      });
+      assert.equal(patched.status, 200);
+      const patchedBody = await patched.json();
+      assert.equal(patchedBody.floating, true);
+      assert.equal(patchedBody.openLinksApp, "Firefox");
+
+      // Persisted to disk, so the next runbook's window picks it up.
+      const onDisk = JSON.parse(await readFile(join(dir, "settings.json"), "utf8"));
+      assert.equal(onDisk.floating, true);
+      assert.equal(onDisk.openLinksApp, "Firefox");
+    } finally {
+      server.close();
+      await server.closed;
+    }
+  } finally {
+    if (savedConfigEnv === undefined) delete process.env.HANDBACK_CONFIG;
+    else process.env.HANDBACK_CONFIG = savedConfigEnv;
+    if (savedGlimpseEnv === undefined) delete process.env.HANDBACK_GLIMPSE_FLOATING;
+    else process.env.HANDBACK_GLIMPSE_FLOATING = savedGlimpseEnv;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("config endpoint rejects an unauthorized request", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "handback-config-auth-"));
+  const savedConfigEnv = process.env.HANDBACK_CONFIG;
+  process.env.HANDBACK_CONFIG = join(dir, "settings.json");
+  try {
+    const store = createSessionStore(dir);
+    await store.save(
+      createSession({ id: "hb_config_auth", token: "secret", now: "now", task: parseTask({ title: "T", steps: [{ id: "s", title: "Step" }] }) })
+    );
+    const server = await serveSession({ id: "hb_config_auth", sessionDir: dir, open: false });
+    try {
+      const res = await fetch(`http://127.0.0.1:${server.port}/api/config`);
+      assert.equal(res.status, 401);
+    } finally {
+      server.close();
+      await server.closed;
+    }
+  } finally {
+    if (savedConfigEnv === undefined) delete process.env.HANDBACK_CONFIG;
+    else process.env.HANDBACK_CONFIG = savedConfigEnv;
     await rm(dir, { recursive: true, force: true });
   }
 });

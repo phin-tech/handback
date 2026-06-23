@@ -105,6 +105,12 @@ handback doctor [task.json]   Print setup hints, or validate a task file if one 
 Sessions persist as JSON under `~/.handback/sessions/` (override the base dir with
 `HANDBACK_HOME`). Set `HANDBACK_OPEN=0` to skip auto-opening the browser.
 
+If [`glimpseui`](https://github.com/hazat/glimpse) is installed (`npm install -g glimpseui`),
+runbooks open in a native window instead of a browser tab. Disable it with `HANDBACK_GLIMPSE=0`,
+or persistently via `~/.config/handback/settings.json` (`{ "glimpse": false }`). The runbook's
+**Settings** panel (⚙ in the top bar) toggles whether the window floats above others and which
+browser opens external links — see the [CLI reference](docs/reference/cli.md#settings-file).
+
 ## Agent skills
 
 This repo ships installable [Agent Skills](https://skills.sh):

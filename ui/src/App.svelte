@@ -12,6 +12,16 @@
   let autoClose = $state(getCookie("handback_auto_close") === "1");
   let theme = $state<"system" | "light" | "dark">((localStorage.getItem("handback-theme") as "system" | "light" | "dark" | null) ?? "system");
 
+  // Settings view + server-side config (Glimpse window options, persisted to ~/.config/handback).
+  let showSettings = $state(false);
+  let cfgFloating = $state(false);
+  let cfgOpenLinksApp = $state("");
+  let cfgApps = $state<{ label: string; value: string }[]>([]);
+  let cfgSaved = $state(false);
+  // "Custom…" lets the user type a path that wasn't discovered. We start in custom
+  // mode when the saved value isn't one of the discovered apps.
+  let customLinksApp = $state(false);
+
   // Per-step UI state (kept separate from session so polling never clobbers it).
   let collapsed = $state<Record<string, boolean>>({});
   let noteOpen = $state<Record<string, boolean>>({});
@@ -190,7 +200,15 @@
     returned = true;
     error = "";
     if (session) session = { ...session, status: "finished" };
-    if (autoClose) setTimeout(() => window.close(), 250);
+    if (autoClose) setTimeout(closeWindow, 250);
+  }
+
+  // In a Glimpse native window, window.close() is a no-op — ask the host to close
+  // itself via the injected `glimpse.close` bridge, falling back to window.close().
+  function closeWindow(): void {
+    const glimpseClose = (window as unknown as { glimpse?: { close?: () => void } }).glimpse?.close;
+    if (typeof glimpseClose === "function") glimpseClose();
+    else window.close();
   }
 
   // ---- local input handling ------------------------------------------------
@@ -246,6 +264,52 @@
     autoClose = next;
     document.cookie = `handback_auto_close=${next ? "1" : "0"}; Path=/; SameSite=Lax; Max-Age=31536000`;
   }
+
+  // Glimpse window options live server-side (they shape the next `glimpseui` spawn),
+  // so load/save them through /api/config rather than browser storage.
+  async function loadSettings(): Promise<void> {
+    try {
+      const res = await fetch(`/api/config?token=${encodeURIComponent(token)}`);
+      if (!res.ok) return;
+      applyConfig(await res.json());
+      // Decide the initial dropdown mode once, from the loaded value.
+      customLinksApp = Boolean(cfgOpenLinksApp) && !cfgApps.some((a) => a.value === cfgOpenLinksApp);
+    } catch {
+      /* settings are optional; ignore */
+    }
+  }
+  function applyConfig(cfg: { floating?: boolean; openLinksApp?: string; apps?: { label: string; value: string }[] }): void {
+    cfgFloating = Boolean(cfg.floating);
+    cfgOpenLinksApp = String(cfg.openLinksApp ?? "");
+    if (Array.isArray(cfg.apps)) cfgApps = cfg.apps;
+  }
+  async function saveSettings(patch: Record<string, unknown>): Promise<void> {
+    cfgSaved = false;
+    try {
+      const res = await fetch(`/api/config?token=${encodeURIComponent(token)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch)
+      });
+      if (!res.ok) return;
+      applyConfig(await res.json());
+      cfgSaved = true;
+      setTimeout(() => (cfgSaved = false), 1500);
+    } catch {
+      /* ignore */
+    }
+  }
+  // Dropdown change: "" = system default, "__custom__" = reveal the path field,
+  // anything else = a discovered app path we can save immediately.
+  function onLinksAppSelect(value: string): void {
+    if (value === "__custom__") {
+      customLinksApp = true;
+      return;
+    }
+    customLinksApp = false;
+    cfgOpenLinksApp = value;
+    saveSettings({ openLinksApp: value });
+  }
   function getCookie(name: string): string | undefined {
     return document.cookie
       .split("; ")
@@ -254,6 +318,7 @@
   }
 
   load().catch((err) => (error = err.message));
+  loadSettings().catch(() => undefined);
   setInterval(() => load().catch(() => undefined), 1000);
   $effect(() => {
     document.documentElement.dataset.theme = theme;
@@ -273,8 +338,70 @@
     <span class="count">{progress.complete} / {progress.total}</span>
     <button class="theme-toggle" title={`Theme: ${theme}`} aria-label={`Theme: ${theme}`} onclick={cycleTheme}
       >{theme === "system" ? "◐" : theme === "light" ? "☼" : "☾"}</button>
+    <button class="theme-toggle" title="Settings" aria-label="Settings" onclick={() => (showSettings = true)}>⚙</button>
     <button class="finish" disabled={!canFinish || finished} onclick={() => finish("completed")}>Finish</button>
   </header>
+
+  {#if showSettings}
+    <div class="settings-backdrop" role="presentation" onclick={() => (showSettings = false)}></div>
+    <div class="settings-panel" role="dialog" aria-label="Settings" aria-modal="true">
+      <header class="settings-head">
+        <h3>Settings</h3>
+        <button class="settings-close" aria-label="Close settings" onclick={() => (showSettings = false)}>✕</button>
+      </header>
+
+      <section class="settings-group">
+        <h4>Appearance</h4>
+        <label class="settings-row">
+          <span>Theme</span>
+          <select value={theme} onchange={(e) => setTheme(e.currentTarget.value as "system" | "light" | "dark")}>
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="settings-group">
+        <h4>Behavior</h4>
+        <label class="settings-row toggle">
+          <input type="checkbox" checked={autoClose} onchange={(e) => setAutoClose(e.currentTarget.checked)} />
+          <span>Auto-close window after returning to the agent</span>
+        </label>
+      </section>
+
+      <section class="settings-group">
+        <h4>Native window</h4>
+        <p class="settings-hint">Applies to the Glimpse native window the next time a runbook opens.</p>
+        <label class="settings-row toggle">
+          <input type="checkbox" checked={cfgFloating} onchange={(e) => saveSettings({ floating: e.currentTarget.checked })} />
+          <span>Float above other windows</span>
+        </label>
+        <label class="settings-row">
+          <span>Open links in</span>
+          <select
+            value={customLinksApp ? "__custom__" : cfgOpenLinksApp}
+            onchange={(e) => onLinksAppSelect(e.currentTarget.value)}
+          >
+            <option value="">System default</option>
+            {#each cfgApps as app}
+              <option value={app.value}>{app.label}</option>
+            {/each}
+            <option value="__custom__">Custom…</option>
+          </select>
+        </label>
+        {#if customLinksApp}
+          <label class="settings-row">
+            <span>App path</span>
+            <input type="text" placeholder="/Applications/Linear.app" bind:value={cfgOpenLinksApp} onchange={() => saveSettings({ openLinksApp: cfgOpenLinksApp })} />
+          </label>
+        {/if}
+        <p class="settings-hint">Send http/https links to a specific app — e.g. point it at Linear to open <code>linear.app</code> links in the desktop app. Detected apps are listed; choose “Custom…” for a full path. Defaults to the system browser.</p>
+      </section>
+
+      {#if cfgSaved}<div class="settings-saved" role="status">Saved</div>{/if}
+    </div>
+  {/if}
 
   <main class="doc">
     <header class="doc-head">
